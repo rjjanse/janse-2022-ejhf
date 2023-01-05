@@ -1,0 +1,3929 @@
+---
+title: Guideline directed therapy in HF and CKD
+author: "Roemer J. Janse"
+date: "14th of January 2022"
+output:
+  word_document:
+    toc: yes
+    toc_depth: 6
+  pdf_document:
+    toc: yes
+    toc_depth: 6
+  htmL_document:
+    toc: yes
+    toc_depth: 6
+header-includes:
+- \usepackage{subfig}
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+geometry: left=1.2cm,right=1,2cm,top=1,2cm,bottom=1,2cm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, evaluate = TRUE, tidy = TRUE,
+                      cache = FALSE, autodep = TRUE, 
+                      warning = FALSE, message = FALSE,
+                      out.width = '600px', dpi = 100)
+
+# Change to your own directory
+knitr::opts_knit$set(root.dir = "~/Research/[] Nephrology/5. GDT_HF_CKD/Codes/Dataframes/")
+
+# packages
+pacman::p_load("dplyr","tidyr","Gmisc","knitr", "broom", "ggplot2","survival","reshape2","data.table","tableone", "broom", "formatR", 
+               "xtable","kableExtra","pander","epiR","forestplot","biostat3","paf","Hmisc","summarytools","twang", "survey", "KMunicate", 
+               "cowplot", "patchwork", "gridExtra", "ggpubr", "stringr", "Epi", "pammtools", "reactable", "epitools", "grid", "ggpattern",
+               "ggtext", "riskRegression")
+options(knitr.table.format = 'markdown')
+
+```
+
+# 0. Load data
+```{r data settings}
+# This is used to load the data
+rm(list = ls()) 
+
+memory.limit(size = 60000)
+
+# Load data
+load("pop.Rdata")
+sample <- pop 
+
+# One observation per person
+dat.tab1.rEF <- sample %>% filter(cov_ef == "rEF") %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
+dat.tab1.mEF <- sample %>% filter(cov_ef == "mEF") %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
+
+```
+
+```{r Summary}
+#View data
+view(dfSummary(dat.tab1.rEF))
+```
+
+
+# 1. Baseline characteristics
+``` {r Baseline characteristics}
+### Create function
+tab1 <- function(df){
+  # Specify which variables in the dataset you want to include in the baseline table
+  listvar <- c(
+      # General information
+      "cov_age", "cov_age_cat", "cov_female", "cov_egfr", "cov_smok", "cov_year_cat",
+      # Specific heart failure information
+      "cov_nyha", "cov_hfdur", "cov_ntprobnp", "cov_pe", "cov_loc", 
+      # Comorbidities
+      "cov_ob", "cov_af", "cov_an", "cov_cevd", "cov_copd", "cov_dcm", "cov_dm", "cov_ht", "cov_ihd", "cov_ld", "cov_pad", "cov_valv", 
+      "cov_ca",
+      # Procedures
+      "cov_revasc", "cov_dev",
+      # Medication use in prior 180 days
+      "cov_dx", "cov_diu", "cov_st", "cov_ac", "cov_ap", "cov_nt",
+      # Clinical measurements
+      "cov_bmi", "cov_bpsys", "cov_bpdia", "cov_map", "cov_hb", "cov_pot", "cov_hr",
+      # Socioeconomic characteristics
+      "cov_cs", "cov_inc", "cov_edu"
+  )
+
+  # specify which variables are continuous
+  continuous <- c("cov_age", "cov_egfr", "cov_ntprobnp", "cov_ef", "cov_hfdur", "cov_bmi", "cov_bpsys", "cov_bpdia", "cov_map", 
+                  "cov_hb", "cov_pot", "cov_hr") 
+
+  catvar <- listvar[!listvar %in% continuous] # specify that all other variables except the ones specified previously are categorical
+
+  # Give labels to the variables
+  labels <- c("Number of individuals",
+              "Age, median (IQR), y",
+              "Age group, n (%)", "< 45 years", "46-65", "66-75", ">75",
+              "Women, n (%)",
+              "eGFR, median (IQR), mL/min/1.73m2",
+              "Smoking, n (%)", "Never", "Former", "Current", 
+              "Index year 2014-2018",
+              "NYHA class", 
+              "HF duration", 
+              "NT-proBNP, median (IQR), pg/mL",
+              "Primary etiology", "DCM", "Heart valve disease", "Hypertension", "IHD", "Known alcoholic cardiomyopathy", "Other", 
+              "Hospitalization index",
+              "Obesity",
+              "Atrial fibrillation",
+              "Anemia", 
+              "Cerebrovascular disease",
+              "COPD",
+              "Dilated cardiomyopathy",
+              "Diabetes mellitus",
+              "Hypertension",
+              "Ischemic heart disease",
+              "Liver disease", 
+              "Peripheral artery disease",
+              "Valvular disease",
+              "Cancer in the past 3 years",
+              "Coronary revascularization", 
+              "Devices (CRT, ICD, or pacemaker)", 
+              "Digoxin", 
+              "Diuretics", 
+              "Statins",  
+              "Anticoagulants",
+              "Antiplatelets", 
+              "Nitrates", 
+              "BMI, median (IQR), kg/m2",
+              "Systolic BP, median (IQR), mmHg",
+              "Diastolic BP, median (IQR), mmHg",
+              "Mean arterial pressure, mean (SD), mmHg",
+              "Hemoglobin, mean (SD), g/L",
+              "Potassium, mean (SD), mmol/L",
+              "Heart rate, median (IQR), BPM",
+              "Civil status, living alone, n (%)", 
+              "Income above median",
+              "Highest achieved education, n (%)", "Compulsory school", "Secondary school", "University"
+  )
+
+  # Makes baseline table overall
+  # For more information what is specified here, please see:
+  # https://www.rdocumentation.org/packages/tableone/versions/0.12.0/topics/CreateTableOne 
+  # https://www.rdocumentation.org/packages/tableone/versions/0.12.0/topics/print.TableOne
+  table_overall <- CreateTableOne(vars = listvar, data = df, factorVars = catvar)
+  table_overall <- print(table_overall, printToggle = FALSE, noSpaces = TRUE, catDigits = 0, contDigits = 0, pDigits = 3,
+                         nonnormal = c("cov_age", "cov_egfr", "cov_hr", "cov_bpsys", "cov_bpdia", "cov_bmi", "cov_hr", "cov_ntprobnp")) 
+
+  # Makes baseline table stratified by treatment level
+  table_stratified <- CreateTableOne(vars = listvar, data = df, factorVars = catvar, smd = FALSE, strata = "exp_egfr")
+  table_stratified <- print(table_stratified, printToggle = FALSE, noSpaces = TRUE, catDigits = 0, contDigits = 0, pDigits = 3,
+                            nonnormal = c("cov_age", "cov_egfr", "cov_hr", "cov_bpsys", "cov_bpdia", "cov_bmi", "cov_hr", "cov_ntprobnp"), 
+                            smd = FALSE) 
+  table_stratified <- as.matrix(table_stratified[, 1:4])
+
+  table1 <- cbind(table_overall, table_stratified)
+  
+  ## Add commas for large numbers
+  table1[, 1:5] <- prettyNum(table1[, 1:5], big.mark = ",")
+
+  # Set missings to empty
+  table1[, 1:5] <- ifelse(grepl("NA", table1[, 1:5]), "", table1[, 1:5])
+
+  # Add column for missings
+  table1 <- cbind(rep("", length(table1[, 1])), rep("", length(table1[, 1])), table1)
+  
+  # Variables with missings: cov_nyha, cov_hfdur, cov_pe, cov_phhf, cov_ntprobnp, cov_ld, cov_ob, cov_an, cov_dev, cov_pm, cov_dx, cov_diu,
+  # cov_st, cov_ac, cov_ap, cov_nt, cov_hr, cov_bnp, cov_bpsys, cov_bpdia, cov_map, cov_hb, cov_bmi, cov_pot, cov_smok, cov_edu, cov_cs
+  table1[, 1] <- gsub(" .*", "", rownames(table1))
+  
+  # Total amount of people
+  n.total <- length(unique(df[["lopnr"]]))
+  
+  # For loop selecting the missing value from each table
+  for(r in 1:length(table1[, 1])){
+    if(table1[r, 1] %in% c("cov_nyha", "cov_hfdur", "cov_pe", "cov_phhf", "cov_ntprobnp", "cov_ld", "cov_ob", "cov_an", "cov_dev", 
+                           "cov_pm", "cov_dx", "cov_diu", "cov_st", "cov_ac", "cov_ap", "cov_nt", "cov_hr", "cov_bnp", "cov_bpsys", 
+                           "cov_bpdia", "cov_map", "cov_hb", "cov_bmi", "cov_pot", "cov_smok", "cov_edu", "cov_cs")){
+      n.missings <- table(df[[table1[r, 1]]], useNA = "always")[[length(table(df[[table1[r, 1]]], useNA = "always"))]]
+      table1[r, 2] <- paste0(format(round(n.missings / n.total * 100, digits = 1), nsmall = 1), "%")
+    }
+  }
+  
+  # Remove var column
+  table1 <- table1[, 2:7]
+  
+  # Add labels and column names
+  row.names(table1) <- labels
+  colnames(table1) <- c("Missing", "Overall", "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")
+  
+  return(table1)
+
+  # remove objects
+  rm(listvar, continuous, catvar, labels, table_overall, table_stratified, table1)
+}
+
+## Run function
+# HFrEF
+kable(tab1(dat.tab1.rEF), caption = "Table 1 for HFrEF")
+  
+# HFmrEF
+kable(tab1(dat.tab1.mEF), caption = "Table 1 for HFmrEF")
+
+```
+
+
+# 2. Prescription and claim
+## 2.1. Tables with percentages
+```{r Prescription and claims}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    fit <- glm(pres_pd ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  if(type == "Filled prescriptions"){
+    fit <- glm(init_pd ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+
+### Function for multivariable odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "Filled prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+    
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "Prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pres_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pres_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pres_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pres_pd)[["0"]]
+  }
+  
+  if(type == "Filled prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$init_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$init_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$init_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$init_pd)[["0"]]
+  }
+  
+  # Determine odds ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, type, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, type, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, type, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, type, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, type, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, type, drg, "eGFR <30")
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00))
+  
+  colnames(tab) <- c("", "", "Number of individuals", type, "Percentage", "Univariable OR (95% CI)", "Multivariable OR (95% CI)")
+  return(tab)
+}
+ 
+# HFrEF
+tab.rEF <- rbind(
+  cbind(f("Prescriptions", "rEF", "RASi/ARNi"), f("Filled prescriptions", "rEF", "RASi/ARNi")[, 2:7]),
+  cbind(f("Prescriptions", "rEF", "BB"), f("Filled prescriptions", "rEF", "BB")[, 2:7]),
+  cbind(f("Prescriptions", "rEF", "MRA"), f("Filled prescriptions", "rEF", "MRA")[, 2:7]),
+  cbind(f("Prescriptions", "rEF", "ARNi"), f("Filled prescriptions", "rEF", "ARNi")[, 2:7]),
+  cbind(f("Prescriptions", "rEF", "TT"), f("Filled prescriptions", "rEF", "TT")[, 2:7])
+)
+
+colnames(tab.rEF)[c(1:2, 8)] <- ""
+
+kable(tab.rEF, caption = "Prescription and filled prescriptions in HFrEF")
+
+# HFmrEF
+tab.mrEF <- rbind(
+  cbind(f("Prescriptions", "mEF", "RASi/ARNi"), f("Filled prescriptions", "mEF", "RASi/ARNi")[, 2:7]),
+  cbind(f("Prescriptions", "mEF", "BB"), f("Filled prescriptions", "mEF", "BB")[, 2:7]),
+  cbind(f("Prescriptions", "mEF", "MRA"), f("Filled prescriptions", "mEF", "MRA")[, 2:7]),
+  cbind(f("Prescriptions", "mEF", "ARNi"), f("Filled prescriptions", "mEF", "ARNi")[, 2:7]),
+  cbind(f("Prescriptions", "mEF", "TT"), f("Filled prescriptions", "mEF", "TT")[, 2:7])
+)
+
+colnames(tab.mrEF)[c(1:2, 8)] <- ""
+
+kable(tab.mrEF, caption = "Prescription and filled prescriptions in HFmrEF")
+
+rm(rr, or, f, tab.rEF, tab.mrEF, tab.pEF)
+
+```
+
+
+## 2.2. Figure for prescription and claim
+### 2.2.1. Two different barcharts
+```{r Figure persistence and claim, eval=FALSE, include=FALSE}
+### Create function to get per category percentage
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "Prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pres_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pres_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pres_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pres_pd)[["0"]]
+  }
+  
+  if(type == "Filled prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$init_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$init_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$init_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$init_pd)[["0"]]
+  }
+  
+  p.60 <- round(e.60 / n.60 * 100)
+  p.45 <- round(e.45 / n.45 * 100)
+  p.30 <- round(e.30 / n.30 * 100)
+  p.00 <- round(e.00 / n.00 * 100)
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  dat <- data.frame(
+    drug = drg_name,
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    prop = c(p.60, p.45, p.30, p.00)
+  )
+  
+  return(dat)
+}
+
+### Create function to make one plot from all data
+barplot <- function(type, ef){
+  dat.plot <- rbind(
+    f(type, ef, "RASi/ARNi"),
+    f(type, ef, "BB"),
+    f(type, ef, "MRA"),
+    f(type, ef, "ARNi"),
+    f(type, ef, "TT")
+  ) %>% mutate(drug = factor(drug, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "ARNi", "Triple therapy")),
+               egfr = factor(egfr, levels = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", 
+                                              "eGFR <30 mL/min/1.73m2")))
+  
+  # Custom labels
+  type <- ifelse(type == "Prescriptions", "prescriptions", "filled prescriptions")
+  ef <- ifelse(ef == "mEF", "mrEF", ef)
+  
+  egfr_lab.60 <- "eGFR >=60 mL/min/1.73m"
+  egfr_lab.45 <- "eGFR 45-59 mL/min/1.73m"
+  egfr_lab.30 <- "eGFR 30-44 mL/min/1.73m"
+  egfr_lab.00 <- "eGFR <30 mL/min/1.73m"
+  
+  plot <- ggplot(data = dat.plot, aes(x = drug, y = prop, fill = egfr)) +
+    geom_bar(stat = "identity", position = "dodge") + 
+    geom_text(position = position_dodge(width = 0.9), aes(x = drug, y = prop + 2.5, label = prop), size = 3) +
+    scale_fill_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE"),
+                      labels = c(bquote(.(egfr_lab.60) ^ 2), bquote(.(egfr_lab.45) ^ 2), 
+                                 bquote(.(egfr_lab.30) ^ 2), bquote(.(egfr_lab.00) ^ 2))) +
+    scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20), expand = c(0, 0)) +
+    labs(title = paste0("Percentage of ", type, " by eGFR strata in HF", ef)) + ylab("Percentage (%)") + xlab("Drug") +
+    theme(axis.ticks.x = element_blank(),
+          axis.line.x = element_line(colour = "black"),
+          axis.line.y = element_line(colour = "black"),
+          legend.title = element_blank(),
+          legend.position = "bottom",
+          panel.background = element_blank(),
+          panel.grid = element_blank(),
+          plot.title = element_text(hjust = 0.5))
+  
+  type <- ifelse(type == "prescriptions", "presp", "claim")
+  
+  ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".pdf"), 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+  
+  ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".png"), 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+}
+
+### Create plots
+## Prescriptions
+# HFrEF
+barplot("Prescriptions", "rEF")
+
+# HFmrEF
+barplot("Prescriptions", "mEF")
+
+## Claims
+# HFrEF
+barplot("Filled prescriptions", "rEF")
+
+# HFmrEF
+barplot("Filled prescriptions", "mEF")
+
+rm(f, barplot)
+
+``` 
+
+### 2.2.2. Overlapped bar charts
+```{r}
+### Create function to get per category percentage
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "Prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pres_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pres_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pres_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pres_pd)[["0"]]
+  }
+  
+  if(type == "Filled prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$init_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$init_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$init_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$init_pd)[["0"]]
+  }
+  
+  p.60 <- round(e.60 / n.60 * 100)
+  p.45 <- round(e.45 / n.45 * 100)
+  p.30 <- round(e.30 / n.30 * 100)
+  p.00 <- round(e.00 / n.00 * 100)
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  dat <- data.frame(
+    drug = drg_name,
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    prescription = c(p.60, p.45, p.30, p.00),
+    ph = c("Prescription", "Prescription", "Filled prescription", "Filled prescription")
+  )
+  
+  return(dat)
+}
+
+### Create function to make one plot from all data
+barplot <- function(ef){
+  dat.plot <- rbind(
+    cbind(f("Prescriptions", ef, "RASi/ARNi"), f("Filled prescriptions", ef, "RASi/ARNi")[["prescription"]]) %>% rename(claim = 5),
+    cbind(f("Prescriptions", ef, "BB"), f("Filled prescriptions", ef, "BB")[["prescription"]]) %>% rename(claim = 5),
+    cbind(f("Prescriptions", ef, "MRA"), f("Filled prescriptions", ef, "MRA")[["prescription"]]) %>% rename(claim = 5),
+    cbind(f("Prescriptions", ef, "TT"), f("Filled prescriptions", ef, "TT")[["prescription"]]) %>% rename(claim = 5)
+  ) %>% mutate(drug = factor(drug, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")),
+               egfr = factor(egfr, levels = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", 
+                                              "eGFR <30 mL/min/1.73m2")))
+  
+  # Custom labels
+  ef <- ifelse(ef == "mEF", "mrEF", ef)
+  
+  egfr_lab.60 <- "eGFR >=60 mL/min/1.73m"
+  egfr_lab.45 <- "eGFR 45-59 mL/min/1.73m"
+  egfr_lab.30 <- "eGFR 30-44 mL/min/1.73m"
+  egfr_lab.00 <- "eGFR <30 mL/min/1.73m"
+  
+  (plot <- ggplot(data = dat.plot, aes(x = drug, y = prescription, fill = egfr)) +
+    geom_bar(stat = "identity", position = "dodge", alpha = 0.7) + 
+    geom_bar_pattern(aes(y = claim), stat = "identity", position = "dodge", alpha = 1,  
+                     pattern = "circle", pattern_colour = NA, pattern_fill = "white", pattern_density = 0.1) + 
+    geom_text(position = position_dodge(width = 0.9), aes(x = drug, y = prescription + 2.5, label = prescription), size = 3,
+              colour = "black") +
+    geom_text(position = position_dodge(width = 0.9), aes(x = drug, y = claim - 2.5, label = claim), size = 3, colour = "white") +
+    scale_fill_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE"),
+                      labels = c(bquote(.(egfr_lab.60) ^ 2), bquote(.(egfr_lab.45) ^ 2), 
+                                 bquote(.(egfr_lab.30) ^ 2), bquote(.(egfr_lab.00) ^ 2))) +
+    scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20), expand = c(0, 0)) +
+    coord_cartesian(clip = "off") +
+    labs(title = paste0("Percentage of prescriptions and filled prescriptions by eGFR strata in HF", ef)) +
+    ylab("Percentage (%)") + xlab("Drug") + 
+    theme(axis.ticks.x = element_blank(),
+          axis.line.x = element_line(colour = "black"),
+          axis.line.y = element_line(colour = "black"),
+          legend.title = element_blank(),
+          legend.position = "bottom",
+          panel.background = element_blank(),
+          panel.grid = element_blank(),
+          plot.title = element_text(hjust = 0.5)))
+  
+  ggsave(plot = plot, filename = paste0(paste("ol_barplot", ef, sep = "_"), ".pdf"), 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+  
+  ggsave(plot = plot, filename = paste0(paste("ol_barplot", ef, sep = "_"), ".png"), 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+}
+
+### Create plots
+# HFrEF
+barplot("rEF")
+
+# HFmrEF
+barplot("mEF")
+
+```
+
+### 2.2.3. Forest plots
+```{r}
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "Filled prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(es, ll, ul, result)
+  
+  return(dat.lor)
+}
+    
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+ 
+  # Determine odds ratio (multivariable)
+  ors <- data.frame(
+    rbind(c("", "", "", ""),
+          c(1, 1, 1, "1 (Reference)"), 
+          or(dat.temp, type, drg, "eGFR 45-59"),
+          or(dat.temp, type, drg, "eGFR 30-44"),
+          or(dat.temp, type, drg, "eGFR <30"))
+  )
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg_name, drg_name, drg_name, drg_name, drg_name),
+    egfr = c(drg_name, "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"),
+    n = c("", n.60, n.45, n.30, n.00),
+    strata = rep(type, times = 5)
+  )
+  
+  tab <- cbind(tab, ors) %>% mutate(es = as.numeric(es), ll = as.numeric(ll), ul = as.numeric(ul), 
+                                    n = formatC(as.numeric(n), big.mark = ",", format = "d"), 
+                                    n = ifelse(n == "NA", "", n),
+                                    egfr = factor(egfr, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy", 
+                                                                   "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")))
+
+  return(tab)
+}
+
+### Function for plots
+fps <- function(ef){
+  ### Warnings for vectorized input can be ignored
+  
+  # Prescriptions
+  dat.plot <- rbind(
+    f("Prescriptions", ef, "RASi/ARNi"),
+    f("Prescriptions", ef, "BB"),
+    f("Prescriptions", ef, "MRA"),
+    f("Prescriptions", ef, "TT"),
+    f("Filled prescriptions", ef, "RASi/ARNi"),
+    f("Filled prescriptions", ef, "BB"),
+    f("Filled prescriptions", ef, "MRA"),
+    f("Filled prescriptions", ef, "TT")
+  ) %>% arrange(drug, egfr, desc(strata)) %>% filter(!(n == "" & strata == "Filled prescriptions")) %>% 
+    mutate(line = row_number(),                                                                              
+           line = rev(line),
+           egfr = ifelse(strata == "Filled prescriptions", "", egfr),
+           egfr = ifelse(egfr == 1, "ACEi/ARB/ARNi", 
+                         ifelse(egfr == 2, "Beta-blocker", 
+                                ifelse(egfr == 3, "MRA", 
+                                       ifelse(egfr == 4, "Triple therapy",
+                                              ifelse(egfr == 5, "eGFR >=60 mL/min/1.73m2",
+                                                     ifelse(egfr == 6, "eGFR 45-59 mL/min/1.73m2",
+                                                            ifelse(egfr == 7, "eGFR 30-44 mL/min/1.73m2",
+                                                                   ifelse(egfr == 8, "eGFR <30 mL/min/1.73m2", egfr)))))))),
+           n = ifelse(strata == "Filled prescriptions", "", n),
+           result_presp = result,
+           result_claim = lead(result),
+           result_presp = ifelse(strata == "Filled prescriptions", "", result_presp),
+           result_claim = ifelse(strata == "Filled prescriptions", "", result_claim),
+           result_claim = ifelse(is.na(es), "", result_claim))
+
+  # Define where horizontal lines go
+  hlines <- c(0.5, 2.5, 4.5, 6.5, 8.5, 9.5, 11.5, 13.5, 15.5, 17.5, 18.5, 20.5, 22.5, 24.5, 26.5, 27.5, 29.5, 31.5, 33.5, 35.5)
+  
+  fp <- function(df){
+    plot <- ggplot(data = df, aes(y = line, x = es, xmin = ll, xmax = ul, colour = strata)) +
+      geom_point() + geom_errorbarh(height = .1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rep("", times = nrow(dat.plot)), expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = NULL, breaks = seq(0.5, 1.25, by = 0.25), 
+                         limits = c(0.45, 1.35)) + labs(title = "Adjusted OR* (95% CI)") +
+      scale_colour_manual(values= c("#332288", "#117733")) +
+      geom_vline(xintercept = 1, colour = "black", linetype = "dashed", alpha = 0.5) + 
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0.5) + 
+      guides(colour = guide_legend(reverse = TRUE)) +
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            plot.title = element_text(margin = margin(5, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.line.x.bottom = element_line(colour = "black"),
+            axis.ticks.y = element_blank(),
+            legend.position = "bottom",
+            legend.title = element_blank(),
+            legend.background = element_blank(),
+            legend.key = element_blank())
+  }
+ 
+  fplot <- fp(dat.plot)
+  
+  # Data to determine bold faces for specific labels bold
+  egfrs <- c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = 12, no = 11))
+  
+  gg_datacolumns <- function(df, label, title , labels = NULL){
+    p <- ggplot(data = df, aes(y = line, x = 1)) +
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0) + 
+      labs(title = title) + annotate("text", y = dat.plot$line, x = 1, label = label, vjust = 1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels, expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = "", breaks = 0, labels = "") + 
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels, vjust = 1), 
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5))
+    return(p)
+  }
+  
+  rows <- nrow(dat.plot)
+  
+  n <- gg_datacolumns(dat.plot, label = dat.plot$n, "N", labels = c(
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "Triple therapy",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , expression("eGFR  >=60 mL/min/1.73m" ^ 2), "MRA",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , expression("eGFR  >=60 mL/min/1.73m" ^ 2), "Beta-blocker",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , expression("eGFR  >=60 mL/min/1.73m" ^ 2), "ACEi/ARB/ARNi"
+  ))
+  
+  result.preps <- gg_datacolumns(dat.plot, label = dat.plot$result_presp, "Prescriptions", labels = rep("", times = 36))
+
+  result.claim <- gg_datacolumns(dat.plot, label = dat.plot$result_claim, "Filled prescriptions", labels = rep("", times = 36))
+  
+  plot <- plot_grid(n, fplot, result.preps, result.claim, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 2, 1, 1))
+
+  ggsave(filename = paste0("fp_props_", ef, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 9, height = 8, dpi = 600)
+
+  ggsave(filename = paste0("fp_props_", ef, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 9, height = 8, dpi = 600)
+}
+
+### Make plots
+# HFrEF
+fps("rEF")
+
+# HFmrEF
+fps("mEF")
+
+rm(fps, f, or)
+
+``` 
+
+### 2.2.4. Splines for prescription and initiation
+```{r eval=FALSE, include=FALSE}
+### Function for model
+or <- function(df, type){
+  dat.model <- df %>% filter(cov_egfr <= 120)
+  
+  if(type == "Prescriptions"){
+    fit <- glm(pres_pd ~ pspline(cov_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 ov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+  }
+  
+  if(type == "Filled prescriptions"){
+    fit <- glm(init_pd ~ pspline(cov_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+  }
+  
+  # Get data for eGFR
+  dat <- termplot(fit, se = TRUE, plot = FALSE)[["cov_egfr"]]
+  
+  # Transform to risks
+  dat <- dat %>% rename(egfr = x) %>% mutate(ll = exp(y - (1.96 * se)),
+                                             ul = exp(y + (1.96 * se)),
+                                             es = exp(y)) %>% dplyr::select(-y, -se)
+  
+  return(dat)
+}
+
+### Function for plot
+plt.spline <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Get data for plot
+  dat.plot <- or(dat.temp, type) 
+  
+  # Change type to lowercase
+  type <- ifelse(type == "Prescriptions", "prescriptions", "filled prescriptions")
+  
+  # Custom labels
+  xlab <- "eGFR in mL/min/1.73m"
+  drg <- ifelse(drg == "RASi", "ACEis/ARBs", ifelse(drg == "BB", "beta-blockers", ifelse(drg == "TT", "triple therapy", drg)))
+  
+  # Create plot
+  plot <- ggplot(data = dat.plot, aes(x = egfr, y = es, ymin = ll, ymax = ul)) +
+    geom_line(colour = "#332288") + geom_ribbon(fill = "#332288", alpha = 0.3) +
+    scale_x_continuous(limits = c(0, 120), breaks = seq(0, 120, 20)) + 
+    xlab(bquote(.(xlab) ^ 2)) + ylab("Adjusted OR* (95% CI)") + 
+    labs(title = paste0("Association of eGFR with ", type, " using smoothing splines for ", drg, " in HF", ef)) +
+    theme(panel.background = element_blank(),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_line(colour = "grey", linetype = "solid"),
+          panel.grid.minor = element_blank(),
+          axis.line.x.bottom = element_line(colour = "black", size = 0.5),
+          axis.line.y.left = element_line(colour = "black", size = 0.5),
+          plot.title = element_text(margin = margin(0, 0, 0, 0), face = "bold", size = 12, hjust = 0.5),
+          legend.position = c(0.01, 1),
+          legend.margin = margin(0, 0, 0, 0),
+          legend.justification = c("left", "top"),
+          legend.title = element_blank())
+  
+  # Save
+  ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Splines/", width = 9, height = 8, dpi = 600)
+
+  ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Splines/", width = 9, height = 8, dpi = 600)
+}
+
+## Prescriptions
+# HFrEF
+plt.spline("Prescriptions", "rEF", "RASi")
+plt.spline("Prescriptions", "rEF", "BB")
+plt.spline("Prescriptions", "rEF", "MRA")
+plt.spline("Prescriptions", "rEF", "ARNi")
+plt.spline("Prescriptions", "rEF", "TT")
+
+# HFmrEF
+plt.spline("Prescriptions", "mEF", "RASi")
+plt.spline("Prescriptions", "mEF", "BB")
+plt.spline("Prescriptions", "mEF", "MRA")
+plt.spline("Prescriptions", "mEF", "ARNi")
+plt.spline("Prescriptions", "mEF", "TT")
+
+## Filled prescriptions
+# HFrEF
+plt.spline("Filled prescriptions", "rEF", "RASi")
+plt.spline("Filled prescriptions", "rEF", "BB")
+plt.spline("Filled prescriptions", "rEF", "MRA")
+plt.spline("Filled prescriptions", "rEF", "ARNi")
+plt.spline("Filled prescriptions", "rEF", "TT")
+
+# HFmrEF
+plt.spline("Filled prescriptions", "mEF", "RASi")
+plt.spline("Filled prescriptions", "mEF", "BB")
+plt.spline("Filled prescriptions", "mEF", "MRA")
+plt.spline("Filled prescriptions", "mEF", "ARNi")
+plt.spline("Filled prescriptions", "mEF", "TT")
+
+```
+
+# 3. Initiators
+## 3.1. Adherence & persistence percentages
+```{r Adherence and persistence}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    fit <- glm(pdc_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  if(type == "persistence"){
+    fit <- glm(gap_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    if(drug == "ARNi"){
+      if(egfr == "eGFR 45-59" | egfr == "eGFR <30"){
+        fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+      }
+      
+      if(egfr != "eGFR 45-59" & egfr != "eGFR <30"){
+        fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+      }
+    }
+    
+    else{
+      fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "persistence"){
+    if(drug == "ARNi"){
+      if(egfr == "eGFR 45-59" | egfr == "eGFR <30"){
+                fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + mod_hfdur + mod_ld + mod_an + 
+                  cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                  mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+      }
+      
+      if(egfr != "eGFR 45-59" & egfr != "eGFR <30"){
+        fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                  cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                  mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+      }
+    }
+    
+    else{
+      fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+  
+### Function for absolute risks
+##### Function #####
+ars <- function(df){
+    dat.model <- df %>% mutate(event_ind = ifelse(gap_ind == 1, 1, ifelse(mort_ind == 1, 2, 0)))
+  
+    # Model
+    fit <- survfit(Surv(time2gap, as.factor(gap_ind), type = "mstate") ~ as.factor(exp_egfr), data = dat.model)
+ 
+    # Main survival data
+    dat.fit <- fit %>% 
+        # Change fit list to dataframe
+        broom::tidy() %>%
+        # Keep only events
+        dplyr::filter(state == "1") %>%
+        # Select only relevant variables
+        dplyr::select(time, strata, estimate, conf.high, conf.low) %>%
+        # Create strata names
+        dplyr::mutate(strata = ifelse(strata == "as.factor(exp_egfr)=eGFR >60", "eGFR >=60 mL/min/1.73m2",
+                                      ifelse(strata == "as.factor(exp_egfr)=eGFR 45-59", "eGFR 45-59 mL/min/1.73m2",
+                                             ifelse(strata == "as.factor(exp_egfr)=eGFR 30-44", "eGFR 30-44 mL/min/1.73m2",
+                                                    ifelse(strata == "as.factor(exp_egfr)=eGFR <30", "eGFR <30 mL/min/1.73m2", NA))))) %>%
+        # Change time to years
+        dplyr::mutate(time = time / (365.25 / 12)) 
+    
+    # Get last estimate as absolute risk at 12 months
+    dat.fit <- dat.fit %>% arrange(strata, desc(estimate)) %>% group_by(strata) %>% slice(1L) %>% ungroup() %>%
+      mutate(ar = round(estimate * 100, digits = 1),
+             ll = round(conf.low * 100, digits = 1),
+             ul = round(conf.high * 100, digits = 1),
+             `Absolute risks (95% CI)` = paste0(format(ar, nsmall = 1), "% (",
+                                                format(ll, nsmall = 1), "-",
+                                                format(ul, nsmall = 1), ")")) %>% dplyr::select(strata, `Absolute risks (95% CI)`)
+    
+    return(dat.fit)
+}
+    
+### Function for table
+prps <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  if(type == "adherence"){
+    dat.temp <- filter(dat.temp, !is.na(pdc))
+  }
+  
+  if(type == "persistence"){
+    dat.temp <- filter(dat.temp, !is.na(time2gap))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "adherence"){
+    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
+    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
+    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
+    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+  }
+  
+  if(type == "persistence"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$gap_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$gap_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$gap_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$gap_ind)[["0"]]
+  }
+  
+  # Determine odds ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, type, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, type, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, type, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, type, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, type, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, type, drg, "eGFR <30")
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00))
+  
+  colnames(tab) <- c("", "strata", "Number of individuals", ifelse(type == "persistence", "Discontinuation", "Low PDC"), "Percentage", 
+                     "Univariable OR (95% CI)", "Multivariable OR (95% CI)")
+  
+  if(type == "persistence"){
+    tab <- tab %>% left_join(ars(dat.temp), "strata")
+  }
+  
+  colnames(tab)[2] <- ""
+  
+  return(tab)
+}
+
+## Adherence
+# HFrEF
+tab.rEF <- rbind(
+  prps("adherence", "rEF", "RASi/ARNi"),
+  prps("adherence", "rEF", "BB"),
+  prps("adherence", "rEF", "MRA"),
+  prps("adherence", "rEF", "ARNi"),
+  prps("adherence", "rEF", "TT")
+)
+
+kable(tab.rEF, caption = "Adherence in the first 12 months in HFrEF")              
+
+# HFmrEF
+tab.mrEF <- rbind(
+  prps("adherence", "mEF", "RASi/ARNi"),
+  prps("adherence", "mEF", "BB"),
+  prps("adherence", "mEF", "MRA"),
+  prps("adherence", "mEF", "ARNi"),
+  prps("adherence", "mEF", "TT")
+)
+
+kable(tab.mrEF, caption = "Adherence in the first 12 months in HFmrEF")   
+
+## Persistence
+# HFrEF
+tab.rEF <- rbind(
+  prps("persistence", "rEF", "RASi/ARNi"),
+  prps("persistence", "rEF", "BB"),
+  prps("persistence", "rEF", "MRA"),
+  prps("persistence", "rEF", "ARNi"),
+  prps("persistence", "rEF", "TT")
+)
+
+kable(tab.rEF, caption = "Persistence in the first 12 months in HFrEF")              
+
+# HFmrEF
+tab.mrEF <- rbind(
+  prps("persistence", "mEF", "RASi/ARNi"),
+  prps("persistence", "mEF", "BB"),
+  prps("persistence", "mEF", "MRA"),
+  prps("persistence", "mEF", "ARNi"),
+  prps("persistence", "mEF", "TT")
+)
+
+kable(tab.mrEF, caption = "Persistence in the first 12 months in HFmrEF")   
+
+rm(ars, rr, or, prps, tab.rEF, tab.mrEF, tab.pEF)
+
+```
+
+
+## 3.2. Cumulative incidence functions
+```{r CIFs, eval=FALSE, include=FALSE}
+# Function for different eGFR strata and HFrEF strata
+cifs <- function(drg, ef, zoom = FALSE){
+  dat.samp <- filter(sample, drug == drg & cov_ef == ef)
+  
+  if(drg == "ARNi"){
+    dat.samp <- filter(sample, index_dt >= as.Date("2016-01-01"))
+   
+    exclude <- filter(dat.samp, drug == "RASi" & init_pd == 1)
+    dat.samp <- dat.samp %>% filter(!(lopnr %in% exclude$lopnr))
+    dat.samp <- dat.samp %>% filter(drug == "ARNi" & cov_ef == ef)
+  }
+  
+  # Create title
+  ttl_ef <- ifelse(ef == "mEF", "mrEF", ef)
+  ttl_drug <- ifelse(drg == "RASi", "ACEi/ARB", ifelse(drg == "TT", "triple therapy", ifelse(drg == "BB", "beta-blocker", drg)))
+  ttl <- paste0("Discontinuation within 12 months after initiation for ", ttl_drug, " among HF", ttl_ef)
+  savename <- paste0(paste("perplot", drg, ttl_ef, sep = "_"), ".pdf")
+  
+  # Create layered indicator for event and censoring
+  dat.ce <- dat.samp %>% filter(!is.na(time2event)) %>% mutate(event_ce = ifelse(gap_ind == 1, 1, ifelse(mort_ind == 1, 2, 0)))
+
+  # Model
+  fit <- survfit(Surv(time2event, as.factor(event_ce), type = "mstate") ~ as.numeric(exp_egfr), data = dat.ce)
+    
+  # Get sequence of x-axis
+  xseq <- 0:12
+  
+  ## Main survival data
+  dat.temp <- fit %>% 
+      # Change fit list to dataframe
+      broom::tidy() %>%
+      # Keep only events
+      dplyr::filter(state == "1") %>%
+      # Select only relevant variables
+      dplyr::select(time, strata, estimate, conf.high, conf.low) %>%
+      # Create strata names
+      dplyr::mutate(strata = ifelse(strata == "exp_egfr=eGFR >60", "eGFR >60",
+                                    ifelse(strata == "exp_egfr=eGFR 45-59", "eGFR 45-59",
+                                           ifelse(strata == "exp_egfr=eGFR 30-44", "eGFR 30-44",
+                                                  ifelse(strata == "exp_egfr=eGFR <30", "eGFR <30", NA))))) %>%
+      # Change time to months
+      dplyr::mutate(time = time / (365.25 / 12))
+  
+  # To make line show up from time 0, at estimates = 0 at time 0
+  dat.time0 <- data.frame(
+    strata = c("eGFR <30", "eGFR 30-44", "eGFR 45-59", "eGFR >60"),
+    estimate = 0,
+    conf.high = NA,
+    conf.low = NA,
+    time = 0
+  )
+  
+  dat.temp <- rbind(dat.temp, dat.time0) %>% arrange(strata, time) %>% group_by(strata, time) %>% slice(1L) %>% ungroup()
+    
+  # Create preliminary dataset with n.risk
+  dat.fit2 <- fit %>%
+      # Change fit2 list to dataframe
+      broom::tidy() %>%
+      # Get states with numbers at risk
+      dplyr::filter(state == "(s0)") %>%
+      # Change time to months
+      dplyr::mutate(time = time / (365.25 / 12)) %>%
+      # Create strata names
+      dplyr::mutate(strata = ifelse(strata == "exp_egfr=eGFR >60", "eGFR >60",
+                                    ifelse(strata == "exp_egfr=eGFR 45-59", "eGFR 45-59",
+                                           ifelse(strata == "exp_egfr=eGFR 30-44", "eGFR 30-44",
+                                                  ifelse(strata == "exp_egfr=eGFR <30", "eGFR <30", NA))))) %>%
+      # Keep only variables of interest
+      dplyr::select(time, n.risk, strata)
+
+  # For loop to get closest number at risk to each timepoint on the x axis
+  for(i in xseq){
+      ph <- dat.fit2 %>%
+          # Calculate difference of timepoint (i) - time. 
+          dplyr::mutate(diff = i - time) %>%
+          # Keep only relevant timepoints (positive number: before timepoint)
+          dplyr::filter(diff >= 0) %>%
+          # Sort on diff ascending and keep only timepoint closest
+          dplyr::arrange(strata, diff) %>% dplyr::group_by(strata) %>% dplyr::slice(1L) %>% dplyr::ungroup() %>%
+          # Round up time
+          dplyr::mutate(time = i) 
+            
+      if(i == xseq[[1]]){
+          dat.tab <- ph
+      }
+              
+      else{
+          dat.tab <- rbind(dat.tab, ph)
+      }
+  }
+        
+  # Clean up after for loop
+  rm(i, ph, dat.fit2)
+        
+  # Get time 0 numbers
+  time.0 <- as.data.frame(rbind(cbind("eGFR >60", table(dat.ce$exp_egfr)[["eGFR >60"]]), 
+                                cbind("eGFR 45-59", table(dat.ce$exp_egfr)[["eGFR 45-59"]]),
+                                cbind("eGFR 30-44", table(dat.ce$exp_egfr)[["eGFR 30-44"]]),
+                                cbind("eGFR <30", table(dat.ce$exp_egfr)[["eGFR <30"]]))) %>%
+      dplyr::rename(strata = V1, n.risk = V2) %>% dplyr::mutate(time = 0, diff = 0) 
+        
+  # Finalize data
+  dat.tab <- rbind(time.0, dat.tab) %>%
+      # Arrange to tidy data
+      dplyr::arrange(strata, time) %>%
+      # Drop diff variable
+      dplyr::select(-diff) 
+  
+  # Loop to fill in blanks that weren't in data
+  for(i in 1:11){
+    # Take categories for whom time i is undefined
+    cats <- filter(dat.tab, !(strata %in% filter(dat.tab, time == i)$strata)) %>% arrange(strata) %>% group_by(strata) %>% slice(1L) %>% 
+      ungroup() %>% dplyr::select(strata)
+    
+    # Determine highest time below i present
+    ht <- dat.tab %>% arrange(strata) %>% group_by(strata) %>% mutate(ht_ind = ifelse(time > i, 0, 1)) %>% filter(ht_ind == 1)
+    
+    # New n.risk based on highest time below i
+    new <- cats %>% left_join(ht %>% dplyr::select(strata, n.risk), "strata") %>% mutate(time = i)
+    
+    # Combine all new times
+    if(i == 1){
+      dat.new <- new
+    }
+    
+    else{
+      dat.new <- rbind(dat.new, new) 
+    }
+  }
+  
+  dat.tab <- rbind(dat.tab, dat.new) %>% arrange(strata, time) %>%
+    # Add commas to big numbers
+    dplyr::mutate(n.risk = formatC(as.numeric(n.risk), format = "d", big.mark = ","))
+
+  ### ----------------- Defining aesthetics of plot ----------------- ###
+  # Define theme for plot
+  theme_min <- function(){
+      theme(panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.line.x.bottom = element_line(colour = "black", size = 0.5),
+            axis.line.y.left = element_line(colour = "black", size = 0.5),
+            plot.title = element_text(margin = margin(0, 0, 0, 0), face = "bold", size = 12, hjust = 0.5),
+            legend.position = c(0.01, 1),
+            legend.margin = margin(0, 0, 0, 0),
+            legend.justification = c("left", "top"),
+            legend.title = element_blank())
+      }
+    
+  ### ----------------- Creating plot ----------------- ###      
+  # Create main plot
+  plot <- ggplot(data = dat.temp, aes(x = time, y = estimate, group = strata)) +
+      geom_step(aes(colour = strata, linetype = strata), size = 0.35) +
+      pammtools::geom_stepribbon(aes(fill = strata, ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+      scale_colour_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE")) + 
+      scale_fill_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE")) + 
+      scale_linetype_manual(values = c(2, 3, 4, 5)) +
+      scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1)) +
+      scale_x_continuous(breaks = xseq, labels = xseq) +
+      labs(title = ttl) + xlab("Time (months)") + ylab("Absolute risk of discontinuation") +
+      theme_min()
+  
+  if(zoom == TRUE){  
+    # Create zoomed in plot
+    zoom.plot <- ggplot(data = dat.temp, aes(x = time, y = estimate, group = strata)) +
+        geom_step(aes(colour = strata, linetype = strata), size = 0.35) +
+        pammtools::geom_stepribbon(aes(fill = strata, ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+        scale_colour_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE")) + 
+        scale_fill_manual(values = c("#332288", "#117733", "#44AA99", "#88CCEE")) +
+        scale_linetype_manual(values = c(2, 3, 4, 5)) +
+        scale_y_continuous(breaks = seq(0, 0.25, 0.05), limits = c(0, 0.25)) +
+        scale_x_continuous(breaks = seq(0, 12, 1)) +
+        xlab("") + ylab("") +
+        theme_min() +
+        theme(legend.position = "none",
+              plot.title = element_blank())
+
+    # Add zoomed plot to main plot
+    plot <- plot + annotation_custom(grob = ggplotGrob(zoom.plot), xmin = 4, xmax = 12,
+                                     ymin = 0.2, ymax = 1)
+  }
+
+  # Creating numbers at risk
+  table.plot <- ggplot(data = dat.tab, aes(x = time, y = strata)) +
+      labs(title = "At risk") +
+      annotate("text", x = dat.tab$time, y = dat.tab$strata, label = dat.tab$n.risk) +
+      scale_y_discrete(limits = rev) +
+      theme(plot.background = element_blank(),
+            plot.title = element_text(margin = margin(0, 0, 0, 0), face = "bold", size = 12, hjust = 0.01),
+            axis.ticks.x = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_text(face = "bold", size = 12, colour = "black"),
+            panel.background = element_blank(),
+            panel.grid = element_blank())
+
+  plot <- cowplot::plot_grid(plotlist = list(plot, table.plot), align = "hv", axis = "tblr", ncol = 1, rel_heights = c(4, 2))
+
+  plot
+
+  ggsave(savename, path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/CIFs/", dpi = 600, width = 10, height = 5)
+}
+
+for(drg in c("RASi", "BB", "MRA", "ARNi", "TT")){
+  for(ef in c("rEF", "mEF")){
+    cifs(drg, ef)
+  }
+}
+
+rm(cifs)
+
+```
+
+
+## 3.3. Restarting after discontinuation
+```{r Restart}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  fit <- glm(restart_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function for odds ratio
+or <- function(df, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(drug == "ARNi"){
+    if(egfr == "eGFR 45-59" | egfr == "eGFR <30" | egfr == "eGFR 30-44"){
+      fit <- glm(restart_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    if(egfr != "eGFR 45-59" & egfr != "eGFR <30" & egfr != "eGFR 30-44"){
+      fit <- glm(restart_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+  }
+    
+  else{
+    fit <- glm(restart_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function
+prps <- function(ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01") & init_pd == 1)
+  }
+  
+  # Discontinuers
+  dat.temp <- filter(dat.temp, gap_ind == 1)
+
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  # Events
+  e.60 <- length(filter(dat.temp, exp_egfr == "eGFR >60" & restart_ind == 1)$lopnr)
+  e.45 <- length(filter(dat.temp, exp_egfr == "eGFR 45-59" & restart_ind == 1)$lopnr)
+  e.30 <- length(filter(dat.temp, exp_egfr == "eGFR 30-44" & restart_ind == 1)$lopnr)
+  e.00 <- length(filter(dat.temp, exp_egfr == "eGFR <30" & restart_ind == 1)$lopnr)
+  
+  # Determine risk ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, drg, "eGFR <30")
+  
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00)
+  )
+  
+  colnames(tab) <- c("", "", "Number of individuals", "Restarters", "Percentage", "Univariable OR (95% CI)", "Adjusted OR (95% CI)")
+  
+  return(tab)
+}
+
+# HFrEF
+tab.rEF <- rbind(
+  prps("rEF", "RASi/ARNi"),
+  prps("rEF", "BB"),
+  prps("rEF", "MRA"),
+  prps("rEF", "ARNi"),
+  prps("rEF", "TT")
+)
+
+kable(tab.rEF, caption = "Restarters after discontinuation in HFrEF")
+
+# HFmrEF
+tab.mEF <- rbind(
+  prps("mEF", "RASi/ARNi"),
+  prps("mEF", "BB"),
+  prps("mEF", "MRA"),
+  prps("mEF", "ARNi"),
+  prps("mEF", "TT")
+)
+
+kable(tab.mEF, caption = "Restarters after discontinuation in HFmrEF")
+
+rm(tab.mEF, tab.pEF, tab.rEF, prps)
+
+```
+
+## 3.4. Forest plots for adherence and persistence
+```{r}
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    if(drug == "ARNi"){
+      fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "persistence"){
+    if(drug == "ARNi"){
+      fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(es, ll, ul, result)
+  
+  return(dat.lor)
+}
+
+### Function for absolute risks
+ars <- function(df){
+    dat.model <- df %>% mutate(event_ind = ifelse(gap_ind == 1, 1, ifelse(mort_ind == 1, 2, 0)))
+  
+    # Model
+    fit <- survfit(Surv(time2gap, as.factor(gap_ind), type = "mstate") ~ as.factor(exp_egfr), data = dat.model)
+ 
+    # Main survival data
+    dat.fit <- fit %>% 
+        # Change fit list to dataframe
+        broom::tidy() %>%
+        # Keep only events
+        dplyr::filter(state == "1") %>%
+        # Select only relevant variables
+        dplyr::select(time, strata, estimate, conf.high, conf.low) %>%
+        # Create strata names
+        dplyr::mutate(strata = ifelse(strata == "as.factor(exp_egfr)=eGFR >60", "eGFR >60",
+                                      ifelse(strata == "as.factor(exp_egfr)=eGFR 45-59", "eGFR 45-59",
+                                             ifelse(strata == "as.factor(exp_egfr)=eGFR 30-44", "eGFR 30-44",
+                                                    ifelse(strata == "as.factor(exp_egfr)=eGFR <30", "eGFR <30", NA))))) %>%
+        # Change time to years
+        dplyr::mutate(time = time / (365.25 / 12)) 
+    
+    # Get estimate at last time as absolute risk at 12 months
+    dat.fit <- dat.fit %>% arrange(strata, desc(time)) %>% group_by(strata) %>% slice(1L) %>% ungroup() %>%
+      mutate(ar = round(estimate * 100, digits = 1),
+             ll = round(conf.low * 100, digits = 1),
+             ul = round(conf.high * 100, digits = 1),
+             ars = paste0(format(ar, nsmall = 1), "% (",
+                          format(ll, nsmall = 1), "-",
+                          format(ul, nsmall = 1), "%)"),
+             egfr = factor(strata, levels = c("eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"))) %>% arrange(egfr) %>% 
+      dplyr::select(ars)
+    
+    return(dat.fit)
+}    
+
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg & init_pd == 1)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01") & init_pd == 1)
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+ 
+   if(type == "adherence"){
+    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
+    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
+    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
+    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+  }
+  
+  if(type == "persistence"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$gap_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$gap_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$gap_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$gap_ind)[["0"]]
+  }
+  
+  # Determine odds ratio (multivariable)
+  ors <- data.frame(
+    rbind(c("", "", "", ""),
+          c(1, 1, 1, "1 (Reference)"), 
+          or(dat.temp, type, drg, "eGFR 45-59"),
+          or(dat.temp, type, drg, "eGFR 30-44"),
+          or(dat.temp, type, drg, "eGFR <30"))
+  )
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg_name, drg_name, drg_name, drg_name, drg_name),
+    egfr = c(drg_name, "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"),
+    n = c("", n.60, n.45, n.30, n.00),
+    prop = c("",  round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100))
+  )
+  
+  tab <- cbind(tab, ors) %>% mutate(es = as.numeric(es), ll = as.numeric(ll), ul = as.numeric(ul), 
+                                    n = formatC(as.numeric(n), big.mark = ",", format = "d"), 
+                                    n = ifelse(n == "NA", "", n),
+                                    egfr = factor(egfr, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy", 
+                                                                   "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")))
+  
+  if(type == "persistence"){
+    arisks <- ars(dat.temp)
+    tab <- cbind(tab, rbind("", arisks))
+  }
+
+  return(tab)
+}
+
+### Function for plots
+fps <- function(type, ef){
+  ### Warnings for vectorized input can be ignored
+  
+  # Prescriptions
+  dat.plot <- rbind(
+    f(type, ef, "RASi/ARNi"),
+    f(type, ef, "BB"),
+    f(type, ef, "MRA"),
+    f(type, ef, "TT")
+  ) %>% arrange(drug, egfr) %>% mutate(line = row_number(), line = rev(line),
+                                       egfr = ifelse(egfr == "eGFR >60", "eGFR >=60 mL/min/1.73m2",
+                                                     ifelse(egfr == "eGFR 45-59", "eGFR 45-59 mL/min/1.73m2",
+                                                            ifelse(egfr == "eGFR 30-44", "eGFR 30-44 mL/min/1.73m2",
+                                                                   ifelse(egfr == "eGFR <30", "eGFR <30 mL/min/1.73m2",
+                                                                          ifelse(egfr == "ACEi/ARB/ARNi", "ACEi/ARB/ARNi",
+                                                                                 ifelse(egfr == "Triple therapy", "Triple therapy",
+                                                                                        ifelse(egfr == "Beta-blocker", "Beta-blocker",
+                                                                                               ifelse(egfr == "MRA", "MRA", egfr)))))))))
+                                       
+  
+  uplim <- ifelse(type == "adherence", 1.6, 1.5)
+  uptik <- ifelse(type == "adherence", 1.6, 1.4)
+  
+  fp <- function(df){
+    plot <- ggplot(data = df, aes(y = line, x = es, xmin = ll, xmax = ul)) +
+      geom_point(colour = "#332288") + geom_errorbarh(colour = "#332288", height = .1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rep("", times = nrow(dat.plot)), expand = c(0.05, 0.05)) +
+      scale_x_continuous(name = "", breaks = seq(0.8, uptik, by = 0.2), limits = c(0.4, 3.5)) + 
+      geom_vline(xintercept = 1, colour = "black", linetype = "dashed", alpha = 0.5) + 
+      geom_hline(yintercept = seq(0.5, nrow(dat.plot) - 0.5, 1), linetype = "solid", colour = "grey", alpha = 0.5) + 
+      labs(title = "") + coord_cartesian(xlim = c(0.7, uplim)) +
+      theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
+            plot.title = element_text(margin = margin(5, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.line.x.bottom = element_line(colour = "black"),
+            axis.ticks.y = element_blank())
+  }
+ 
+  fplot <- fp(dat.plot)
+  
+  if(type == "adherence" & ef == "mEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 1, xend = 1.6449, yend = 1), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) +
+      geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 2, xend = 1.6449, yend = 2), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) +
+      geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 3, xend = 1.6449, yend = 3), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm")))
+  }
+  
+    if(type == "persistence" & ef == "mEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 3, xend = 1.54, yend = 3), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) +
+      geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 8, xend = 1.54, yend = 8), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm")))
+  }
+  
+  # Data to determine bold faces for specific labels bold
+  egfrs <- c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = 12, no = 11))
+  
+  gg_datacolumns <- function(df, label, title, labels = NULL){
+    p <- ggplot(data = df, aes(y = line, x = 1)) +
+      geom_hline(yintercept = seq(0.5, nrow(dat.plot) - 0.5, 1), linetype = "solid", colour = "grey", alpha = 0) + 
+      labs(title = title) + annotate("text", y = dat.plot[["line"]], x = 1, label = label) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels, expand = c(0.05, 0.05)) +
+      scale_x_continuous(name = "", breaks = 0, labels = "") + 
+      theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels), 
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5))
+    return(p)
+  }
+  
+  rows <- nrow(dat.plot)
+  
+  n <- gg_datacolumns(dat.plot, label = dat.plot[["n"]], "N", labels = c(
+    expression("eGFR <30 mL/min/1.73m" ^ 2), expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    expression("eGFR  45-59 mL/min/1.73m" ^ 2), expression("eGFR  >=60 mL/min/1.73m" ^ 2), "Triple therapy",
+    expression("eGFR <30 mL/min/1.73m" ^ 2), expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    expression("eGFR  45-59 mL/min/1.73m" ^ 2), expression("eGFR  >=60 mL/min/1.73m" ^ 2), "MRA",
+    expression("eGFR <30 mL/min/1.73m" ^ 2), expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    expression("eGFR  45-59 mL/min/1.73m" ^ 2), expression("eGFR  >=60 mL/min/1.73m" ^ 2), "Beta-blocker",
+    expression("eGFR <30 mL/min/1.73m" ^ 2), expression("eGFR  30-44 mL/min/1.73m" ^ 2), 
+    expression("eGFR  45-59 mL/min/1.73m" ^ 2), expression("eGFR  >=60 mL/min/1.73m" ^ 2), "ACEi/ARB/ARNi"
+  ))
+  
+  p <- gg_datacolumns(dat.plot, label = dat.plot[["prop"]], "%", labels = rep("", times = rows))
+  
+  result.or <- gg_datacolumns(dat.plot, label = dat.plot[["result"]], "Adjusted OR* (95% CI)", labels = rep("", times = rows))
+  
+  if(type == "persistence"){
+    result.ar <- gg_datacolumns(dat.plot, label = dat.plot[["ars"]], "Absolute risks** (95% CI)", labels = rep("", times = rows))
+    
+    plot <- plot_grid(n, p, fplot, result.or, result.ar, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.5, 0.5, 1.5, 1.3, 1.2))
+    
+    wd <- 11
+  }
+  
+  else{
+    plot <- plot_grid(n, p, fplot, result.or, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.5, 0.5, 2, 1.2))
+    
+    wd <- 9
+  }
+
+  ggsave(filename = paste0("fp_", type, "_", ef, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
+
+  ggsave(filename = paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
+}
+
+### Make plots
+## Adherence
+# HFrEF
+fps("adherence", "rEF")
+
+# HFmrEF
+fps("adherence", "mEF")
+
+## Persistence
+# HFrEF
+fps("persistence", "rEF")
+
+# HFmrEF
+fps("persistence", "mEF")
+
+rm(fps, f, or, ars)
+
+``` 
+
+
+# 4. Predictors
+## 4.1. Prescription fills
+```{r eval=FALSE, include=FALSE}
+### Function for logistic model
+model <- function(df, type, drg, var){
+  if(type == "claims"){
+    form <- paste0("init_pd ~ ", var)
+  }
+  
+  if(type == "adherence"){
+    form <- paste0("pdc_ind ~ ", var)
+    dat.model <- df %>% filter(init_pd == 1)
+  }
+  
+  if(type == "persistence"){
+    form <- paste0("gap_ind ~ ", var)
+    dat.model <- df %>% filter(init_pd == 1)
+  }
+  
+  dat.model <- df
+  
+  dat.lor <- data.frame(ph = "EMPTY")
+  
+  # Run despite error (https://www.geeksforgeeks.org/handling-errors-in-r-programming/) 
+  tryCatch(               
+    # Specifying expression
+    expr = {                     
+      fit <- glm(as.formula(form), data = dat.model, family = binomial())
+      
+      dat.lor <- cbind(rownames(as.data.frame(summary(fit)$coef)), as.data.frame(summary(fit)$coef)) %>% 
+        rename(se = `Std. Error`, var = `rownames(as.data.frame(summary(fit)$coef))`) %>% filter(row_number() >= 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% 
+        dplyr::select(var, es, ll, ul, result)
+    },
+    # Specifying error message
+    error = function(e){         
+      # Create variable names as they occur in the model
+      levs <- levels(dat.model[[var]])[2:length(levels(dat.model[[var]]))]
+      vars <- paste0(var, levs)
+    
+      # Create dataframe
+      dat.lor <- data.frame(
+        var = vars, 
+        es = NA,
+        ll = NA,
+        ul = NA,
+        result = rep("MODEL ERROR", length(vars))
+      )
+    },
+  
+    warning = function(w){      
+      print("There was a warning message.")
+    },
+  
+    finally = 
+  )
+  
+  if(dat.lor[1, 1] == "EMPTY"){
+      # Create variable names as they occur in the model
+      levs <- levels(dat.model[[var]])[2:length(levels(dat.model[[var]]))]
+      vars <- paste0(var, levs)
+    
+      # Create dataframe
+      dat.lor <- data.frame(
+        var = vars, 
+        es = NA,
+        ll = NA,
+        ul = NA,
+        result = rep("MODEL ERROR", length(vars))
+      )
+  }
+  
+  drg_name <- ifelse(drg == "RASi", "ACEi/ARB", ifelse(drg == "BB", "Beta-blocker", ifelse(drg == "TT", "Triple therapy", drg)))
+  
+  dat.lor <- cbind(rep(drg_name, nrow(dat.lor)), dat.lor)
+  
+  return(dat.lor)
+}
+
+### Function for running model for all variables
+pred <- function(type, drg, ef){
+  rm(dat.tab)
+  
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # for(egfr in c("eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")){
+  #   # Empty dataframe for loop
+  #   dat <- data.frame(var = as.character(), result = as.character())
+  #   
+  #   for(var in c("cov_age_cat", "cov_female", "mod_hfdur", "cov_dm", "cov_af", "cov_cevd", "mod_edu", "mod_cs")){
+  #     dat <- rbind(dat, model(dat.temp, type, drg, egfr, var))
+  #   }
+  #   
+  #   colnames(dat)[[6]] <- egfr
+  #   
+  #   if(egfr == "eGFR >60"){
+  #     dat.tab <- dat
+  #   }
+  #   
+  #   else{
+  #     dat.tab <- dat.tab %>% left_join(dat, c("rep(drg_name, nrow(dat.lor))", "var"))
+  #   }
+  # }
+  
+  # Empty dataframe for loop
+  dat <- data.frame(var = as.character(), result = as.character())
+
+  for(var in c("cov_age_cat", "cov_female", "mod_hfdur", "mod_ob", "cov_dm", "cov_af", "cov_cevd", "cov_ld", "mod_edu", "mod_cs", 
+               "cov_inc", "cov_year_cat", "exp_egfr")){
+     dat <- rbind(dat, model(dat.temp, type, drg, var))
+  }
+  
+  dat.tab <- dat
+  
+  vars <- data.frame(
+    var = unique(dat.tab$var),
+    grp = c("Age", "Age", "Age", "Sex", "HF duration", "HF duration", "Obesity", "Obesity", "Diabetes mellitus", "Atrial fibrillation", 
+            "Cerebrovascular disease", "Liver disease", "Education", "Education", "Education", "Social status", "Social status",
+            "Income", "Index year", "eGFR", "eGFR", "eGFR"),
+    cat = c("45-65 years", "66-75 years", ">75 years", "Female", ">6 months", "Missing", "Yes", "Missing", "Yes", "Yes", "Yes", "Yes", 
+            "Secondary school", "University", "Missing", "Cohabitating", "Missing", "Above median", "2014-2018", "eGFR 45-59", 
+            "eGFR 30-44", "eGFR <30"),
+    variable = c("Age 45-65 vs. <45 years", "Age 66-75 vs. <45 years", "Age >75 vs. <45 years", "Female", 
+                 "HF duration >6 months vs. <6 months", "HF duration missing vs. <6 months", "Obesity vs. no obesity", 
+                 "Obesity missing vs. no obesity", "Diabetes mellitus", "Atrial fibrillation", "Cerebrovascular disease", "Liver disease", 
+                 "Education secondary vs. compulsory school", "Education university vs. compulsory school", 
+                 "Education missing vs. compulsory school", "Civil status cohabitating vs. living alone", 
+                 "Civil status missing vs. living alone", "Income above vs. below median", "Index year 2014-2018 vs. 2009-2013", 
+                 "eGFR 45-59 vs. >60 mL/min", "eGFR 30-44 vs. >60 mL/min", "eGFR <30 vs. >60 mL/min")
+  ) %>% mutate(grp = factor(grp, levels = c("eGFR", "Age", "Sex", "HF duration", "Obesity", "Diabetes mellitus", "Atrial fibrillation",
+                                            "Cerebrovascular disease", "Liver disease", "Education", "Social status", "Income",
+                                            "Index year")),
+               cat = factor(cat, levels = c("45-65 years", "66-75 years", ">75 years", "Female", ">6 months", "Secondary school", 
+                                            "University", "Cohabitating", "Above median", "2014-2018", "eGFR 45-59", 
+                                            "eGFR 30-44", "eGFR <30", "Yes", "Missing")),
+               variable = factor(variable, levels = c("eGFR 45-59 vs. >60 mL/min", "eGFR 30-44 vs. >60 mL/min", "eGFR <30 vs. >60 mL/min", 
+                                                      "Age 45-65 vs. <45 years", "Age 66-75 vs. <45 years", "Age >75 vs. <45 years", 
+                                                      "Female", "HF duration >6 months vs. <6 months", "HF duration missing vs. <6 months", 
+                                                      "Obesity vs. no obesity", "Obesity missing vs. no obesity", "Diabetes mellitus", 
+                                                      "Atrial fibrillation", "Cerebrovascular disease", "Liver disease", 
+                                                      "Education secondary vs. compulsory school", 
+                                                      "Education university vs. compulsory school", 
+                                                      "Education missing vs. compulsory school", 
+                                                      "Civil status cohabitaitng vs. living alone", 
+                                                      "Civil status missing vs. living alone", 
+                                                      "Income above vs. below median", 
+                                                      "Index year 2014-2018 vs. 2009-2013")))
+  
+  # Join new var names and group and arrange data
+  dat.tab <- dat.tab %>% left_join(vars, "var") %>% dplyr::select(-var) %>% relocate(grp:cat, .before = es) %>% 
+    relocate(es:ul, .before = result) %>% rename(Drug = 1, Variable = 2, Category = 3, label = variable) %>% arrange(Variable, Category)
+  
+  return(dat.tab)
+}
+
+### Function to create table
+tab <- function(type, ef){
+  dat.tab <- rbind(
+    pred(type, "RASi", ef)[, c(1:3, 7)],
+    pred(type, "BB", ef)[, c(1:3, 7)],
+    pred(type, "MRA", ef)[, c(1:3, 7)],
+    pred(type, "ARNi", ef)[, c(1:3, 7)],
+    pred(type, "TT", ef)[, c(1:3, 7)]
+  )
+  
+  return(dat.tab)
+}
+
+### Function to create figure
+fig <- function(type, drg, ef){
+  # Get data
+  # dat.plot <- rbind(
+  #   data.frame(Drug = "ACEi/ARB", Variable = "", Category = "", es = NA, ll = NA, ul = NA, result = "", label = "ACEi/ARB"),
+  #   pred(type, "RASi", ef),
+  #   data.frame(Drug = "Beta-blocker", Variable = "", Category = "", es = NA, ll = NA, ul = NA, result = "", label = "Beta-blocker"),
+  #   pred(type, "BB", ef),
+  #   data.frame(Drug = "MRA", Variable = "", Category = "", es = NA, ll = NA, ul = NA, result = "", label = "MRA"),
+  #   pred(type, "MRA", ef),
+  #   data.frame(Drug = "Triple therapy", Variable = "", Category = "", es = NA, ll = NA, ul = NA, result = "", label = "Triple therapy"),
+  #   pred(type, "TT", ef)
+  # ) %>% mutate(Drug = factor(Drug, levels = c("ACEi/ARB", "Beta-blocker", "MRA", "Triple therapy")))         
+  
+  dat.plot <- pred(type, drg, ef)
+  
+  # Prepare data (remove exploded models, order correctly, replace model errors)
+  dat.plot <- dat.plot %>% mutate(# Set exploded models to NA
+                                  ll = ifelse(ul > 10, NA, ll), 
+                                  es = ifelse(ul > 10, NA, es),
+                                  ul = ifelse(ul > 10, NA, ul),
+                                  es = ifelse(result == "", 100, es)) %>% arrange(Drug, desc(es)) %>% 
+    mutate(line = rev(1:length(dat.plot[, 1])),
+           es = ifelse(es == 100, NA, es),
+           result = ifelse(result == "MODEL ERROR", "-", result))
+  
+  # Data to determine bold faces for specific labels bold
+  drugs <- c("ACEi/ARB", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot[["label"]] %in% drugs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot[["label"]] %in% drugs, yes = 12, no = 11))
+  
+  # Error for 4 missing geoms is normal (labels for drugs)
+  fp <- ggplot(data = dat.plot, aes(x = es, xmin = ll, xmax = ul, y = line)) +
+    geom_point(colour = "#332288") + geom_errorbar(width = 0.3, colour = "#332288") + 
+    geom_vline(xintercept = 1, linetype = "dashed", colour = "grey") +
+    geom_hline(yintercept = seq(0.5, nrow(dat.plot) - 0.5, 1), linetype = "solid", colour = "grey", alpha = 0.5) +
+    scale_x_continuous(limits = c(0.1, 2.0), breaks = seq(0.2, 1.8, 0.2), expand = c(0.01, 0.01)) +
+    scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rev(dat.plot[["label"]]), expand = c(0.02, 0.02)) +
+    xlab("Univariable OR (95% CI)") + labs(title = "") +
+    theme(panel.background = element_blank(),
+          panel.grid = element_blank(),
+          panel.border = element_blank(),
+          panel.spacing = unit(0, "cm"),
+          plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+          axis.line.x.bottom = element_line(colour = "black"),
+          axis.line.y.left = element_line(colour = "black"),
+          axis.ticks.y = element_blank(),
+          axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels))
+    
+  or <- ggplot(data = dat.plot, aes(y = line, x = 1)) +
+    labs(title = "Univariable OR (95% CI)") + annotate("text", y = dat.plot[["line"]], x = 1, label = dat.plot[["result"]]) +
+    geom_hline(yintercept = seq(0.5, nrow(dat.plot) - 0.5, 1), linetype = "solid", colour = "grey", alpha = 0.5) +
+    scale_y_continuous(name = NULL, breaks = 0, labels = "", expand = c(0.02, 0.02)) +
+    scale_x_continuous(name = "", breaks = 0, labels = "", expand = c(0, 0)) + 
+    theme(plot.margin = unit(c(0,0,0,0), "cm"),
+          plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+          panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(), 
+          panel.spacing = unit(0, "cm"),
+          axis.ticks.y = element_blank(),
+          axis.text.y = element_blank())
+  
+  plot <- cowplot::plot_grid(fp, or, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(3, 1))
+  
+  ggsave(plot, file = paste("~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Predictors/fp", type, ef, drg, ".png", sep = "_"),
+         width = 8, height = 5, dpi = 600)
+  
+  ggsave(plot, file = paste("~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Predictors/fp", type, ef, drg, ".pdf", sep = "_"),
+         width = 8, height = 5, dpi = 600)
+}
+
+### Funcion to create plot for each drug
+fig.create <- function(type, ef){
+  for(drug in c("RASi", "BB", "MRA", "TT")){
+    fig(type, drug, ef)
+  }
+}
+
+## Tables
+# HFrEF
+kable(tab("claims", "rEF"), caption = "Univariable predictors for filled prescriptions in HFrEF")
+
+# HFmrEF
+kable(tab("claims", "mEF"), caption = "Univariable predictors for filled prescriptions in HFmrEF")
+
+## Plots
+# HFrEF
+fig.create("claims", "rEF")
+
+# HFmrEF
+fig.create("claims", "mEF")
+
+```
+
+
+## 4.2. Low adherence
+```{r eval=FALSE, include=FALSE}
+# HFrEF
+kable(tab("adherence", "rEF"), caption = "Univariable predictors for adherence in HFrEF")
+
+# HFmrEF
+kable(tab("adherence", "mEF"), caption = "Univariable predictors for adherence in HFmrEF")
+
+```
+
+
+## 4.3. Low persistence
+```{r eval=FALSE, include=FALSE}
+# HFrEF
+kable(tab("persistence", "rEF"), caption = "Univariable predictors for persistence in HFrEF")
+
+# HFmrEF
+kable(tab("persistence", "mEF"), caption = "Univariable predictors for persistence in HFmrEF")
+
+rm(model, pred, tab)
+
+```
+
+
+# 5. Outcomes
+## 5.1. Table
+```{r eval=FALSE, include=FALSE}
+### Function for Cox regression
+cox <- function(df, egfr, outcome){
+  # Get data and set initiators to reference category
+  dat.model <- filter(df, exp_egfr == egfr) %>% mutate(exposure = ifelse(init_pd == 0, 1,
+                                                                         ifelse(init_pd == 1, 0, NA)))
+
+  # Define formula for different outcomes
+  time <- ifelse(outcome == "mort", "time2mort",
+                 ifelse(outcome == "cvmort", "time2cvmort", 
+                        ifelse(outcome == "hosphf", "time2hosphf",
+                               ifelse(outcome == "comp", "time2comp", NA))))
+  
+  event <- ifelse(outcome == "mort", "oc_mort",
+                  ifelse(outcome == "cvmort", "oc_cvmort", 
+                         ifelse(outcome == "hosphf", "oc_hosphf",
+                                ifelse(outcome == "comp", "oc_comp", NA))))
+  
+  formula <- paste0("Surv(", time, ", as.numeric(", event, ")) ~ as.factor(exposure) + cov_age + cov_female + cov_loc + 
+                    mod_hfdur + mod_ld + mod_an + cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + 
+                    cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev +  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + 
+                    mod_hr + mod_bpsys + mod_bpdia + mod_hb + mod_edu + mod_cs + cov_inc + cov_year_cat)")
+  
+  # Mortality
+  fit.mort <- coxph(data = dat.model, as.formula(formula))
+  
+  dat.cox <- summary(fit.mort)$coef %>% as.data.frame() %>% filter(row_number() == 1) %>%
+    mutate(hr = `exp(coef)`,
+           ll = exp(log(hr) - 1.96 * `se(coef)`),
+           ul = exp(log(hr) + 1.96 * `se(coef)`),
+           result = paste0(format(round(hr, digits = 2), nsmall = 2), " (", 
+                           format(round(ll, digits = 2), nsmall = 2), "-", 
+                           format(round(ul, digits = 2), nsmall = 2), ")")) %>% dplyr::select(hr, ll, ul, result)
+  
+  return(dat.cox)
+}
+  
+### Function for incidence rates
+ir <- function(df, egfr, outcome){
+  # Get data
+  dat.model <- filter(df, exp_egfr == egfr)
+
+  # Define formula for different outcomes
+  time <- ifelse(outcome == "mort", "time2mort",
+                 ifelse(outcome == "cvmort", "time2cvmort", 
+                        ifelse(outcome == "hosphf", "time2hosphf",
+                               ifelse(outcome == "comp", "time2comp", NA))))
+  
+  event <- ifelse(outcome == "mort", "oc_mort",
+                  ifelse(outcome == "cvmort", "oc_cvmort", 
+                         ifelse(outcome == "hosphf", "oc_hosphf",
+                                ifelse(outcome == "comp", "oc_comp", NA))))
+  
+  formula <- paste0("Surv((dat.model[[", time, "]] / (365.25 * 100)), dat.model[[", event, "]]) ~ 0")
+  
+  # Run model
+  irs <- survRate(Surv((dat.model[[time]] / ( 365.25 * 100)), as.numeric(dat.model[[event]])) ~ 0) %>% mutate(tstop = tstop * 100) %>% 
+    mutate_at(vars(rate, lower, upper), funs(round(., 1))) %>% mutate_at(vars(tstop), funs(round(., 0))) %>% as.data.frame()
+  
+  # Clean up
+  irs <- irs %>% mutate(ir = rate,
+                        ll = lower,
+                        ul = upper,
+                        rate = paste0(format(ir, nsmall = 1), " (", 
+                                      format(ll, nsmall = 1), "-", 
+                                      format(ul, nsmall = 1), ")")) %>% dplyr::select(rate)
+  
+  return(irs)
+}
+
+### Create function to get per category number of individuals, number of events, incidence rate, and hazard ratio
+f <- function(ef, drg, outcome){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+ 
+  # Events
+  ind <- paste0("oc_", outcome)
+  ev <- ifelse(outcome == "comp", "1", "Yes")
+  
+  e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")[[ind]])[[ev]]
+  e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")[[ind]])[[ev]]
+  e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")[[ind]])[[ev]]
+  e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")[[ind]])[[ev]]
+  
+  # Determine hazard ratio (multivariable)
+  hrs <- data.frame(
+    rbind(c("", "", "", ""),
+          cox(dat.temp, "eGFR >60", outcome), 
+          cox(dat.temp, "eGFR 45-59", outcome),
+          cox(dat.temp, "eGFR 30-44", outcome),
+          cox(dat.temp, "eGFR <30", outcome))
+  )
+  
+  irs <- data.frame(
+    rbind("",
+          ir(dat.temp, "eGFR >60", outcome),
+          ir(dat.temp, "eGFR 45-59", outcome),
+          ir(dat.temp, "eGFR 30-44", outcome),
+          ir(dat.temp, "eGFR <30", outcome))
+  )
+  
+  drg_name <- ifelse(drg == "RASi", "ACEi/ARB", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg_name, drg_name, drg_name, drg_name, drg_name),
+    egfr = c(drg_name, "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"),
+    n = c("", n.60, n.45, n.30, n.00),
+    e = c("", e.60, e.45, e.30, e.00)
+  )
+  
+  # Add incidence rates and hazard ratios
+  tab <- cbind(tab, irs, hrs) %>% mutate(hr = as.numeric(hr), ll = as.numeric(ll), ul = as.numeric(ul), 
+                                         n = formatC(as.numeric(n), big.mark = ",", format = "d"), 
+                                         e = formatC(as.numeric(e), big.mark = ",", format = "d"),
+                                         n = ifelse(n == "NA", "", n), e = ifelse(e == "NA", "" , e),
+                                         egfr = factor(egfr, levels = c("ACEi/ARB", "Beta-blocker", "MRA", "ARNi", "Triple therapy", 
+                                                                        "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")))
+  
+  colnames(tab) <- c("Drug", "Category", "N", "Events", "Incidence rate / 100py", "hr", "ll", "ul", "HR (95% CI)")
+
+  return(tab)
+}
+
+### Small function to create dataframe
+create.tab <- function(ef, outcome){
+  dat <- rbind(
+    f(ef, "RASi", outcome),
+    f(ef, "BB", outcome),
+    f(ef, "MRA", outcome),
+    f(ef, "ARNi", outcome),
+    f(ef, "TT", outcome)
+  ) %>% arrange(Drug, Category) %>% dplyr::select(Category, N, Events, `Incidence rate / 100py`, `HR (95% CI)`)
+  
+  return(dat)
+}
+
+### Run functions
+## Mortality
+# HFrEF
+kable(create.tab("rEF", "mort"), caption = "Mortality in HFrEF")
+
+# HFmrEF
+kable(create.tab("mEF", "mort"), caption = "Mortality in HFmrEF")
+
+## Cardiovascular mortality
+# HFrEF
+kable(create.tab("rEF", "cvmort"), caption = "Mortality in HFrEF")
+
+# HFrEF
+kable(create.tab("mEF", "cvmort"), caption = "Mortality in HFmrEF")
+
+## Heart failure hospitalisation
+# HFrEF
+kable(create.tab("rEF", "hosphf"), caption = "Mortality in HFrEF")
+
+# HFmrEF
+kable(create.tab("mEF", "hosphf"), caption = "Mortality in HFmrEF")
+
+## Composite outcome
+# HFrEF
+kable(create.tab("rEF", "comp"), caption = "Mortality in HFrEF")
+
+# HFmrEF
+kable(create.tab("mEF", "comp"), caption = "Mortality in HFmrEF")
+
+rm(create.tab)
+
+```
+
+## 5.2. Forest plot
+```{r eval=FALSE, include=FALSE}
+### Function to create plot
+fps <- function(ef, outcome){
+  ### Warnings for vectorized input can be ignored
+  
+  # Prescriptions
+  dat.plot <- data.frame(
+    rbind(
+      f(ef, "RASi", outcome),
+      f(ef, "BB", outcome),
+      f(ef, "MRA", outcome),
+      f(ef, "TT", outcome))
+  ) %>% rename(drug = 1, egfr = 2, n = 3, e = 4, ir = 5, hr = 6, ll = 7, ul = 8, result = 9)%>% arrange(drug, egfr) %>% 
+    mutate(line = row_number(), line = rev(line))
+
+  fp <- function(df){
+    plot <- ggplot(data = df, aes(y = line, x = hr, xmin = ll, xmax = ul)) +
+      geom_point(colour = "#332288") + geom_errorbarh(colour = "#332288", height = .1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rep("", times = nrow(dat.plot))) +
+      scale_x_continuous(name = NULL, breaks = seq(0.5, 2, by = 0.25), 
+                         limits = c(0.5, 2)) + 
+      geom_vline(xintercept = 1, colour = "black", linetype = "dashed", alpha = 0.5) + 
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.line.x.bottom = element_line(colour = "black"),
+            axis.ticks.y = element_blank(),
+            legend.position = "bottom",
+            legend.title = element_blank(),
+            legend.background = element_blank(),
+            legend.key = element_blank())
+  }
+ 
+  fplot <- fp(dat.plot)
+  
+  # Data to determine bold faces for specific labels bold
+  egfrs <- c("ACEi/ARB", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = 12, no = 11))
+  
+  gg_datacolumns <- function(df, label, title , labels = NULL){
+    p <- ggplot(data = df, aes(y = line, x = 1)) +
+      labs(title = title) + annotate("text", y = dat.plot$line, x = 1, label = label) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels) +
+      scale_x_continuous(name = "", breaks = 0, labels = "") + 
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels), 
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5))
+    return(p)
+  }
+  
+  rows <- nrow(dat.plot)
+  
+  n <- gg_datacolumns(dat.plot, label = dat.plot$n, "N", labels = rev(dat.plot$egfr))
+  
+  result <- gg_datacolumns(dat.plot, label = dat.plot$result, "Adjusted HR* (95% CI)", labels = rep("", times = rows))
+  
+  plot <- plot_grid(n, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.3, 2, 1.2))
+
+  ggsave(filename = paste0("fp_", outcome, "_", ef, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
+
+  ggsave(filename = paste0("fp_", outcome, "_", ef, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
+}
+
+### For loop to create all plots
+for(lvef in c("rEF", "mEF")){
+  for(oc in c("mort", "cvmort", "hosphf", "comp")){
+    fps(lvef, oc)
+  }
+}
+
+rm(fps, cox, f, ir)
+
+```
+
+# 5. Sensitivity analyses
+## 5.1. ACEi/ARBs and ARNis as composite
+### 5.1.0. Load data
+```{r Data loading SA}
+load("pop.Rdata")
+
+sample <- pop %>% filter(drug == "RASi/ARNi")
+
+```
+
+### 5.1.1 Prescription and claim
+```{r Prescription and claims SA, eval=FALSE, include=FALSE}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    fit <- glm(pres_pd ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  if(type == "Filled prescriptions"){
+    fit <- glm(init_pd ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+
+### Function for multivariable odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "Filled prescriptions"){
+    if(drug == "ARNi"){
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+    
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "Prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pres_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pres_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pres_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pres_pd)[["0"]]
+  }
+  
+  if(type == "Filled prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$init_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$init_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$init_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$init_pd)[["0"]]
+  }
+  
+  # Determine odds ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, type, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, type, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, type, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, type, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, type, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, type, drg, "eGFR <30")
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00))
+  
+  colnames(tab) <- c("", "", "Number of individuals", type, "Percentage", "Univariable OR (95% CI)", "Multivariable OR (95% CI)")
+  return(tab)
+}
+ 
+# HFrEF
+tab.rEF <- cbind(f("Prescriptions", "rEF", "RASi/ARNi"), f("Filled prescriptions", "rEF", "RASi/ARNi")[, 2:7])
+
+colnames(tab.rEF)[c(1:2, 8)] <- ""
+
+kable(tab.rEF, caption = "Prescription and filled prescriptions for ACEi/ARB/ARNi in HFrEF")
+
+# HFmrEF
+tab.mrEF <- cbind(f("Prescriptions", "mEF", "RASi/ARNi"), f("Filled prescriptions", "mEF", "RASi/ARNi")[, 2:7])
+
+colnames(tab.mrEF)[c(1:2, 8)] <- ""
+
+kable(tab.mrEF, caption = "Prescription and filled prescriptions for ACEi/ARB/ARNi in HFmrEF")
+
+rm(rr, or, f, tab.rEF, tab.mrEF, tab.pEF)
+
+```
+
+
+### 5.1.2. Initiators
+#### 5.1.2.1. Adherence & persistence percentages
+```{r Adherence and persistence SA, eval=FALSE, include=FALSE}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    fit <- glm(pdc_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  if(type == "persistence"){
+    fit <- glm(gap_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    if(drug == "ARNi"){
+      fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  if(type == "persistence"){
+    if(drug == "ARNi"){
+      fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+    }
+    
+    else{
+      fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+    }
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+  
+### Function for absolute risks
+##### Function #####
+ars <- function(df){
+    dat.model <- df %>% mutate(event_ind = ifelse(gap_ind == 1, 1, ifelse(mort_ind == 1, 2, 0)))
+  
+    # Model
+    fit <- survfit(Surv(time2gap, as.factor(gap_ind), type = "mstate") ~ as.factor(exp_egfr), data = dat.model)
+ 
+    # Main survival data
+    dat.fit <- fit %>% 
+        # Change fit list to dataframe
+        broom::tidy() %>%
+        # Keep only events
+        dplyr::filter(state == "1") %>%
+        # Select only relevant variables
+        dplyr::select(time, strata, estimate, conf.high, conf.low) %>%
+        # Create strata names
+        dplyr::mutate(strata = ifelse(strata == "as.factor(exp_egfr)=eGFR >60", "eGFR >=60 mL/min/1.73m2",
+                                      ifelse(strata == "as.factor(exp_egfr)=eGFR 45-59", "eGFR 45-59 mL/min/1.73m2",
+                                             ifelse(strata == "as.factor(exp_egfr)=eGFR 30-44", "eGFR 30-44 mL/min/1.73m2",
+                                                    ifelse(strata == "as.factor(exp_egfr)=eGFR <30", "eGFR <30 mL/min/1.73m2", NA))))) %>%
+        # Change time to years
+        dplyr::mutate(time = time / (365.25 / 12)) 
+    
+    # Get last estimate as absolute risk at 12 months
+    dat.fit <- dat.fit %>% arrange(strata, desc(estimate)) %>% group_by(strata) %>% slice(1L) %>% ungroup() %>%
+      mutate(ar = round(estimate * 100, digits = 1),
+             ll = round(conf.low * 100, digits = 1),
+             ul = round(conf.high * 100, digits = 1),
+             `Absolute risks (95% CI)` = paste0(format(ar, nsmall = 1), "% (",
+                                                format(ll, nsmall = 1), "-",
+                                                format(ul, nsmall = 1), ")")) %>% dplyr::select(strata, `Absolute risks (95% CI)`)
+    
+    return(dat.fit)
+}
+    
+### Function for table
+prps <- function(type, ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  if(type == "adherence"){
+    dat.temp <- filter(dat.temp, !is.na(pdc))
+  }
+  
+  if(type == "persistence"){
+    dat.temp <- filter(dat.temp, !is.na(time2gap))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  if(type == "adherence"){
+    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
+    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
+    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
+    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+  }
+  
+  if(type == "persistence"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$gap_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$gap_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$gap_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$gap_ind)[["0"]]
+  }
+  
+  # Determine odds ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, type, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, type, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, type, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, type, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, type, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, type, drg, "eGFR <30")
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00))
+  
+  colnames(tab) <- c("", "strata", "Number of individuals", ifelse(type == "persistence", "Discontinuation", "Low PDC"), "Percentage", 
+                     "Univariable OR (95% CI)", "Multivariable OR (95% CI)")
+  
+  if(type == "persistence"){
+    tab <- tab %>% left_join(ars(dat.temp), "strata")
+  }
+  
+  colnames(tab)[2] <- ""
+  
+  return(tab)
+}
+
+## Adherence
+# HFrEF
+tab.rEF <- prps("adherence", "rEF", "RASi/ARNi")
+
+kable(tab.rEF, caption = "Adherence in the first 12 months for ACEi/ARB/ARNi in HFrEF")              
+
+# HFmrEF
+tab.mrEF <- prps("adherence", "mEF", "RASi/ARNi")
+
+kable(tab.mrEF, caption = "Adherence in the first 12 months for ACEi/ARB/ARNi in HFmrEF")   
+
+## Persistence
+# HFrEF
+tab.rEF <- prps("persistence", "mEF", "RASi/ARNi")
+
+kable(tab.rEF, caption = "Persistence in the first 12 monthsfor ACEi/ARB/ARNi in HFrEF")              
+
+# HFmrEF
+tab.mrEF <- prps("persistence", "mEF", "RASi/ARNi")
+
+kable(tab.mrEF, caption = "Persistence in the first 12 months for ACEi/ARB/ARNi in HFmrEF")   
+
+rm(ars, rr, or, prps, tab.rEF, tab.mrEF, tab.pEF)
+
+```
+
+
+#### 5.1.2.2. Restarting after discontinuation
+```{r Restart SA, eval=FALSE, include=FALSE}
+### Function for risk ratio
+rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
+  b <- as.numeric(b)
+  d <- as.numeric(d)
+  e <- as.numeric(e)
+  f <- as.numeric(f)
+  
+  a <- e - b
+  c <- f - d
+  n <- e + f
+  
+  z <- qnorm(1 - alpha / 2)
+  rr <- (b / e) / (d / f)
+  x2 <- ((n * ((a * d) - (b * c)) ^ 2) / ((a + c) * (b + d) * e * f))
+  
+  if(rr < 1){
+    ll <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+  }
+  
+  else{
+    ll <- round(rr ^ (1 - z / sqrt(x2)), digits = dec)
+    ul <- round(rr ^ (1 + z / sqrt(x2)), digits = dec)
+  }
+
+  rr <- round(rr, digits = dec)
+  
+  result <- paste0(format(rr, nsmall = dec), " (", format(ll, nsmall = dec), "-", format(ul, nsmall = dec), ")")
+  return(result)
+}
+
+### Function for univariable odds ratio
+or.un <- function(df, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  fit <- glm(restart_ind ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function for odds ratio
+or <- function(df, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(drug == "ARNi"){
+    fit <- glm(restart_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+  }
+    
+  else{
+    fit <- glm(restart_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+### Function
+prps <- function(ef, drg){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01") & init_pd == 1)
+  }
+  
+  # Discontinuers
+  dat.temp <- filter(dat.temp, gap_ind == 1)
+
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  # Events
+  e.60 <- length(filter(dat.temp, exp_egfr == "eGFR >60" & restart_ind == 1)$lopnr)
+  e.45 <- length(filter(dat.temp, exp_egfr == "eGFR 45-59" & restart_ind == 1)$lopnr)
+  e.30 <- length(filter(dat.temp, exp_egfr == "eGFR 30-44" & restart_ind == 1)$lopnr)
+  e.00 <- length(filter(dat.temp, exp_egfr == "eGFR <30" & restart_ind == 1)$lopnr)
+  
+  # Determine risk ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, drg, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, drg, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, drg, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, drg, "eGFR 45-59")
+  or.30 <- or(dat.temp, drg, "eGFR 30-44")
+  or.00 <- or(dat.temp, drg, "eGFR <30")
+  
+  tab <- data.frame(
+    drug = c(drg, "", "", ""),
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00)
+  )
+  
+  colnames(tab) <- c("", "", "Number of individuals", "Restarters", "Percentage", "Univariable OR (95% CI)", "Adjusted OR (95% CI)")
+  
+  return(tab)
+}
+
+# HFrEF
+tab.rEF <- prps("rEF", "RASi/ARNi")
+
+kable(tab.rEF, caption = "Restarters after discontinuation for ACEi/ARB/ARNi in HFrEF")
+
+# HFmrEF
+tab.mEF <- prps("mEF", "RASi/ARNi")
+
+kable(tab.mEF, caption = "Restarters after discontinuation for ACEi/ARB/ARNi in HFmrEF")
+
+rm(tab.mEF, tab.pEF, tab.rEF, prps)
+```
+
+
+## 5.2. Antiplatelets in AF
+### 5.2.0. Load data
+```{r}
+rm(list = ls())
+
+# Load data
+load("pop.Rdata")
+sample <- pop %>% filter(cov_af == "Yes" & !is.na(cov_ac)) %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% 
+  ungroup() %>% dplyr::select(-drug) # AC prescription information missing for 84
+
+```
+
+### 5.2.1. Determine prescriptions
+```{r}
+### Function for univariable odds ratio
+or.un <- function(df, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  fit <- glm(cov_ac ~ as.numeric(exp_egfr), data = dat.model, family = binomial())
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+
+
+### Function for multivariable odds ratio
+or <- function(df, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  fit <- glm(cov_ac ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+               cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + 
+               cov_revasc + mod_dev + mod_dx + mod_diu + mod_st + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + 
+               mod_hb + mod_edu + mod_cs + cov_inc + cov_year_cat, data = dat.model, family = binomial())
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(result)
+  
+  return(dat.lor[["result"]])
+}
+    
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(ef){
+  dat.temp <- filter(sample, cov_ef == ef)
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+  
+  e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$cov_ac)[["Yes"]]
+  e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$cov_ac)[["Yes"]]
+  e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$cov_ac)[["Yes"]]
+  e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$cov_ac)[["Yes"]]
+  
+  # Determine odds ratio (univariable)
+  or.un.60 <- "1 (Reference)"
+  or.un.45 <- or.un(dat.temp, "eGFR 45-59")
+  or.un.30 <- or.un(dat.temp, "eGFR 30-44")
+  or.un.00 <- or.un(dat.temp, "eGFR <30")
+  
+  # Determine odds ratio (multivariable)
+  or.60 <- "1 (Reference)"
+  or.45 <- or(dat.temp, "eGFR 45-59")
+  or.30 <- or(dat.temp, "eGFR 30-44")
+  or.00 <- or(dat.temp, "eGFR <30")
+  
+  # Combine data
+  tab <- data.frame(
+    egfr = c("eGFR >=60 mL/min/1.73m2", "eGFR 45-59 mL/min/1.73m2", "eGFR 30-44 mL/min/1.73m2", "eGFR <30 mL/min/1.73m2"),
+    n = c(n.60, n.45, n.30, n.00),
+    e = c(e.60, e.45, e.30, e.00),
+    prop = c(round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100)),
+    or.un = c(or.un.60, or.un.45, or.un.30, or.un.00),
+    or = c(or.60, or.45, or.30, or.00))
+  
+  colnames(tab) <- c("", "Number of individuals", "Prescriptions", "Percentage", "Univariable OR (95% CI)", "Multivariable OR (95% CI)")
+  return(tab)
+}
+ 
+# HFrEF
+tab.rEF <- f("rEF")
+
+kable(tab.rEF, caption = "Prescriptions for anticoagulantia in patients with AF and HFrEF")
+
+# HFrEF
+tab.mrEF <- f("mEF")
+
+kable(tab.mrEF, caption = "Prescriptions for anticoagulantia in patients with AF and HFmrEF")
+
+
+
+```
+
+
+## 5.3. Temporal view
+### 5.3.0. Load data
+```{r}
+rm(list = ls())
+
+# Load data
+load("pop.Rdata")
+sample <- pop 
+
+# Create new variable with index year
+sample <- sample %>% mutate(index_yr = as.numeric(format(index_dt, "%Y")),
+                            index_yr_cat = ifelse(index_yr >= 2009 & index_yr <= 2011, "2009-2011",
+                                                  ifelse(index_yr >= 2012 & index_yr <= 2015, "2012-2015",
+                                                         ifelse(index_yr >= 2016 & index_yr <= 2018, "2016-2018", NA))))
+
+```
+
+### 5.3.1. Create plots for prescriptions and filling prescriptions
+```{r}
+### First create new variable to determine index year
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "Prescriptions"){
+    fit <- glm(pres_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+  }
+  
+  if(type == "Filled prescriptions"){
+    fit <- glm(init_pd ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(es, ll, ul, result)
+  
+  return(dat.lor)
+}
+    
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg, yr){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg & index_yr_cat == yr)
+  
+  # For ARNi, exclude RASi users and index date before 2016-01-01
+  if(drg == "ARNi"){
+    if(type == "Prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & pres_pd == 1)
+    }
+    
+    if(type == "Filled prescriptions"){
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+    }
+    
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & !(lopnr %in% rasi_users$lopnr) & oom_dt >= as.Date("2016-01-01"))
+  }
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+ 
+  # Events
+  if(type == "Prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pres_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pres_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pres_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pres_pd)[["0"]]
+  }
+  
+  if(type == "Filled prescriptions"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$init_pd)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$init_pd)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$init_pd)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$init_pd)[["0"]]
+  }
+  
+  # Determine odds ratio (multivariable)
+  ors <- data.frame(
+    rbind(c("", "", "", ""),
+          c(1, 1, 1, "1 (Reference)"), 
+          or(dat.temp, type, drg, "eGFR 45-59"),
+          or(dat.temp, type, drg, "eGFR 30-44"),
+          or(dat.temp, type, drg, "eGFR <30"))
+  )
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg_name, drg_name, drg_name, drg_name, drg_name),
+    egfr = c(drg_name, "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"),
+    n = c("", n.60, n.45, n.30, n.00),
+    prop = c("", round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100))
+  )
+  
+  tab <- cbind(tab, ors) %>% mutate(es = as.numeric(es), ll = as.numeric(ll), ul = as.numeric(ul), 
+                                    n = formatC(as.numeric(n), big.mark = ",", format = "d"), 
+                                    n = ifelse(n == "NA", "", n),
+                                    egfr = factor(egfr, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy", 
+                                                                   "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")))
+
+  return(tab)
+}
+
+### Function for data per year
+dats <- function(type, ef, yr){
+  ### Warnings for vectorized input can be ignored
+  
+  # Prescriptions
+  dat.plot <- rbind(
+    f(type, ef, "RASi/ARNi", yr),
+    f(type, ef, "BB", yr),
+    f(type, ef, "MRA", yr),
+    f(type, ef, "TT", yr)
+  )  %>% mutate(year = yr)
+  
+  return(dat.plot)
+}
+
+### Function for plots
+plots <- function(type, ef){
+  dat.plot <- rbind(
+    dats(type, ef, "2009-2011"),
+    dats(type, ef, "2012-2015"),
+    dats(type, ef, "2016-2018")
+  ) %>% filter(!(n == "" & (year == "2012-2015" | year == "2016-2018"))) %>%
+    arrange(drug, egfr, year) %>% 
+    mutate(line = row_number(),                                                                              
+           line = rev(line),
+           egfr = ifelse(egfr == "ACEi/ARB/ARNi", "ACEi/ARB/ARNi", 
+                         ifelse(egfr == "Beta-blocker", "Beta-blocker", 
+                                ifelse(egfr == "MRA", "MRA", 
+                                       ifelse(egfr == "Triple therapy", "Triple therapy",
+                                              ifelse(egfr == "eGFR >60", "eGFR >=60 mL/min/1.73m2",
+                                                     ifelse(egfr == "eGFR 45-59", "eGFR 45-59 mL/min/1.73m2",
+                                                            ifelse(egfr == "eGFR 30-44", "eGFR 30-44 mL/min/1.73m2",
+                                                                   ifelse(egfr == "eGFR <30", "eGFR <30 mL/min/1.73m2", egfr)))))))),
+           result_2009 = lag(result),
+           result_2012 = result,
+           result_2016 = lead(result),
+           result_2009 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2009),
+           result_2012 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2012),
+           result_2016 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2016),
+           result_2009 = ifelse(is.na(es), "", result_2009),
+           result_2016 = ifelse(is.na(es), "", result_2016))
+
+  # Define where horizontal lines go
+  hlines <- c(0.5, 3.5, 6.5, 9.5, 12.5, 13.5, 16.5, 19.5, 22.5, 25.5, 26.5, 29.5, 32.5, 35.5, 38.5, 39.5, 42.5, 45.5, 48.5, 51.5)
+  
+  ## Define parameters for coordinates and breaks
+  # Breaks
+  brks.ll <- ifelse(ef == "rEF" & type == "Prescriptions", 0.4,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 0.6,
+             ifelse(ef == "mEF" & type == "Prescriptions", 0.5,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 0.6, NA))))
+  
+  brks.ul <- ifelse(ef == "rEF" & type == "Prescriptions", 1.4,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 1.1,
+             ifelse(ef == "mEF" & type == "Prescriptions", 1.5,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 1.4, NA))))
+  
+  brks.by <- ifelse(ef == "rEF" & type == "Prescriptions", 0.2,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 0.1,
+             ifelse(ef == "mEF" & type == "Prescriptions", 0.25,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 0.2, NA))))
+  
+  # Coord cartesian limits
+  xlms.ll <- ifelse(ef == "rEF" & type == "Prescriptions", 0.4,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 0.6,
+             ifelse(ef == "mEF" & type == "Prescriptions", 0.5,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 0.5, NA))))
+  
+  xlms.ul <- ifelse(ef == "rEF" & type == "Prescriptions",1.45,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 1.1,
+             ifelse(ef == "mEF" & type == "Prescriptions", 1.5,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 1.5, NA))))
+  
+  # Scale_x_continuous limits
+  lims.ll <- ifelse(ef == "rEF" & type == "Prescriptions", 0.3,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 0.5,
+             ifelse(ef == "mEF" & type == "Prescriptions", 0.5,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 0.4, NA))))
+  
+  lims.ul <- ifelse(ef == "rEF" & type == "Prescriptions", 1.5,
+             ifelse(ef == "rEF" & type == "Filled prescriptions", 1.2,
+             ifelse(ef == "mEF" & type == "Prescriptions", 2,
+             ifelse(ef == "mEF" & type == "Filled prescriptions", 1.6, NA))))
+  
+  fp <- function(df){
+    plot <- ggplot(data = df, aes(y = line, x = es, xmin = ll, xmax = ul, colour = year)) +
+      geom_point() + geom_errorbarh(height = .1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rep("", times = nrow(dat.plot)), expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = NULL, breaks = seq(brks.ll, brks.ul, brks.by), 
+                         limits = c(lims.ll, lims.ul)) + labs(title = "Adjusted OR* (95% CI)") +
+      scale_colour_manual(values= c("#332288", "#117733", "#44AA99")) +
+      geom_vline(xintercept = 1, colour = "black", linetype = "dashed", alpha = 0.5) + 
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0.5) + coord_cartesian(xlim = c(xlms.ll, xlms.ul)) +
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            plot.title = element_text(margin = margin(5, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.line.x.bottom = element_line(colour = "black"),
+            axis.ticks.y = element_blank(),
+            legend.position = "bottom",
+            legend.title = element_blank(),
+            legend.background = element_blank(),
+            legend.key = element_blank())
+  }
+ 
+  fplot <- fp(dat.plot)
+  
+  if(type == "Prescriptions" & ef == "mEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 33, xend = 1.55, yend = 33), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) 
+  }
+  
+  # Data to determine bold faces for specific labels bold
+  egfrs <- c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = 12, no = 11))
+  
+  gg_datacolumns <- function(df, label, title , labels = NULL){
+    p <- ggplot(data = df, aes(y = line, x = 1)) +
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0.5) + 
+      labs(title = title) + annotate("text", y = dat.plot$line, x = 1, label = label, size = 3) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels, expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = "", breaks = 0, labels = "") + 
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels), 
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5))
+    return(p)
+  }
+
+  rows <- nrow(dat.plot)
+  
+  txt_gfr.60 <- "eGFR >=60 mL/min/1.73m"
+  txt_gfr.45 <- "eGFR 45-59 mL/min/1.73m"
+  txt_gfr.30 <- "eGFR 30-44 mL/min/1.73m"
+  txt_gfr.00 <- "eGFR <30 mL/min/1.73m"
+  
+  n <- gg_datacolumns(dat.plot, label = dat.plot$n, "N", labels = c(
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "Triple therapy",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" ,  "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "MRA",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "Beta-blocker",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "ACEi/ARB/ARNi"
+  ))
+   
+  prop <- gg_datacolumns(dat.plot, label = dat.plot$prop, "%", labels = rep("", times = rows))
+  
+  result <- gg_datacolumns(dat.plot, label = dat.plot$result, "Adjusted OR* (95% CI)", labels = rep("", times = rows))
+  
+  result.2009 <- gg_datacolumns(dat.plot, label = dat.plot$result_2009, "2009-2011", labels = rep("", times = rows))
+
+  result.2012 <- gg_datacolumns(dat.plot, label = dat.plot$result_2012, "2012-2015", labels = rep("", times = rows))
+  
+  result.2016 <- gg_datacolumns(dat.plot, label = dat.plot$result_2016, "2016-2018", labels = rep("", times = rows))
+  
+  plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
+  
+  ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+  
+  ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+}
+
+## Run function
+# Prescriptions in rEF
+plots("Prescriptions", "rEF")
+
+# Filled prescriptions in rEF
+plots("Filled prescriptions", "rEF")
+
+# Prescriptions in mrEF
+plots("Prescriptions", "mEF")
+
+# Filled prescriptions in mrEF
+plots("Filled prescriptions", "mEF")
+
+```
+
+### 5.3.2. Create plots for adherence and persistence
+```{r}
+### First create new variable to determine index year
+### Function for odds ratio
+### Function for odds ratio
+or <- function(df, type, drg, egfr){
+  dat.model <- df %>% filter(exp_egfr == "eGFR >60" | exp_egfr == egfr)
+  
+  drug <- drg
+  
+  if(type == "adherence"){
+    fit <- glm(pdc_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+  }
+  
+  if(type == "persistence"){
+    fit <- glm(gap_ind ~ as.numeric(exp_egfr) + cov_age + cov_female + cov_loc + mod_hfdur + mod_ld + mod_an + 
+                 cov_af + cov_dm + cov_ihd + cov_ht + cov_dcm + cov_valv + cov_cevd + cov_copd + cov_pad + cov_ca + cov_revasc + mod_dev + 
+                  mod_dx + mod_diu + mod_st + mod_ac + mod_ap + mod_nt + mod_hr + mod_bpsys + mod_bpdia + mod_hb + 
+                 mod_edu + mod_cs + cov_inc, data = dat.model, family = binomial())
+  }
+  
+  dat.lor <- as.data.frame(summary(fit)$coef) %>% 
+        rename(se = `Std. Error`) %>% filter(row_number() == 2) %>%
+        mutate(ll = exp(Estimate - (1.96 * se)),
+               ul = exp(Estimate + (1.96 * se)),
+               es = exp(Estimate),
+               result = paste0(format(round(es, digits = 2), nsmall = 2, scientific = FALSE), " (", 
+                               format(round(ll, digits = 2), nsmall = 2, scientific = FALSE), "-",
+                               format(round(ul, digits = 2), nsmall = 2, scientific = FALSE), ")")) %>% dplyr::select(es, ll, ul, result)
+  
+  return(dat.lor)
+}
+
+### Create function to get per category number of individuals, number of events, percentage and odds ratio
+f <- function(type, ef, drg, yr){
+  dat.temp <- filter(sample, cov_ef == ef & drug == drg & init_pd == 1 & index_yr_cat == yr)
+  
+  # Percentages
+  n.60 <- table(dat.temp$exp_egfr)[["eGFR >60"]]
+  n.45 <- table(dat.temp$exp_egfr)[["eGFR 45-59"]]
+  n.30 <- table(dat.temp$exp_egfr)[["eGFR 30-44"]]
+  n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
+ 
+  if(type == "adherence"){
+    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
+    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
+    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
+    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+  }
+  
+  if(type == "persistence"){
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$gap_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$gap_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$gap_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$gap_ind)[["0"]]
+  }
+  
+  # Determine odds ratio (multivariable)
+  ors <- data.frame(
+    rbind(c("", "", "", ""),
+          c(1, 1, 1, "1 (Reference)"), 
+          or(dat.temp, type, drg, "eGFR 45-59"),
+          or(dat.temp, type, drg, "eGFR 30-44"),
+          or(dat.temp, type, drg, "eGFR <30"))
+  )
+  
+  drg_name <- ifelse(drg == "RASi/ARNi", "ACEi/ARB/ARNi", ifelse(drg == "TT", "Triple therapy", ifelse(drg == "BB", "Beta-blocker", drg)))
+  
+  # Combine data
+  tab <- data.frame(
+    drug = c(drg_name, drg_name, drg_name, drg_name, drg_name),
+    egfr = c(drg_name, "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30"),
+    n = c("", n.60, n.45, n.30, n.00),
+    prop = c("",  round(e.60/n.60 * 100), round(e.45/n.45 * 100), round(e.30/n.30 * 100), round(e.00/n.00 * 100))
+  )
+  
+  tab <- cbind(tab, ors) %>% mutate(es = as.numeric(es), ll = as.numeric(ll), ul = as.numeric(ul), 
+                                    n = formatC(as.numeric(n), big.mark = ",", format = "d"), 
+                                    n = ifelse(n == "NA", "", n),
+                                    egfr = factor(egfr, levels = c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy", 
+                                                                   "eGFR >60", "eGFR 45-59", "eGFR 30-44", "eGFR <30")))
+  
+  return(tab)
+}
+  
+### Function for data per year
+dats <- function(type, ef, yr){
+  ### Warnings for vectorized input can be ignored
+  
+  # Prescriptions
+  dat.plot <- rbind(
+    f(type, ef, "RASi/ARNi", yr),
+    f(type, ef, "BB", yr),
+    f(type, ef, "MRA", yr),
+    f(type, ef, "TT", yr)
+  )  %>% mutate(year = yr)
+  
+  return(dat.plot)
+}
+
+### Function for plots
+plots <- function(type, ef){
+  dat.plot <- rbind(
+    dats(type, ef, "2009-2011"),
+    dats(type, ef, "2012-2015"),
+    dats(type, ef, "2016-2018")
+  ) %>% filter(!(n == "" & (year == "2012-2015" | year == "2016-2018"))) %>%
+    arrange(drug, egfr, year) %>% 
+    mutate(line = row_number(),                                                                              
+           line = rev(line),
+           egfr = ifelse(egfr == "ACEi/ARB/ARNi", "ACEi/ARB/ARNi", 
+                         ifelse(egfr == "Beta-blocker", "Beta-blocker", 
+                                ifelse(egfr == "MRA", "MRA", 
+                                       ifelse(egfr == "Triple therapy", "Triple therapy",
+                                              ifelse(egfr == "eGFR >60", "eGFR >=60 mL/min/1.73m2",
+                                                     ifelse(egfr == "eGFR 45-59", "eGFR 45-59 mL/min/1.73m2",
+                                                            ifelse(egfr == "eGFR 30-44", "eGFR 30-44 mL/min/1.73m2",
+                                                                   ifelse(egfr == "eGFR <30", "eGFR <30 mL/min/1.73m2", egfr)))))))),
+           result_2009 = lag(result),
+           result_2012 = result,
+           result_2016 = lead(result),
+           result_2009 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2009),
+           result_2012 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2012),
+           result_2016 = ifelse(year == "2009-2011" | year == "2016-2018", "", result_2016),
+           result_2009 = ifelse(is.na(es), "", result_2009),
+           result_2016 = ifelse(is.na(es), "", result_2016),
+           es = ifelse(ul == Inf, NA, es),
+           ll = ifelse(ul == Inf, NA, ll),
+           result = ifelse(ul == Inf, "-**", result),
+           ul = ifelse(ul == Inf, NA, ul))
+
+  # Define where horizontal lines go
+  hlines <- c(0.5, 3.5, 6.5, 9.5, 12.5, 13.5, 16.5, 19.5, 22.5, 25.5, 26.5, 29.5, 32.5, 35.5, 38.5, 39.5, 42.5, 45.5, 48.5, 51.5)
+  
+  ## Define parameters for coordinates and breaks
+  # Breaks
+  brks.ll <- ifelse(ef == "rEF" & type == "adherence", 0.5,
+             ifelse(ef == "rEF" & type == "persistence", 0.8,
+             ifelse(ef == "mEF" & type == "adherence", 0,
+             ifelse(ef == "mEF" & type == "persistence", 0.6, NA))))
+  
+  brks.ul <- ifelse(ef == "rEF" & type == "adherence", 2.3,
+             ifelse(ef == "rEF" & type == "persistence", 1.7,
+             ifelse(ef == "mEF" & type == "adherence", 5.4,
+             ifelse(ef == "mEF" & type == "persistence", 2.0, NA))))
+  
+  brks.by <- ifelse(ef == "rEF" & type == "adherence", 0.3,
+             ifelse(ef == "rEF" & type == "persistence", 0.15,
+             ifelse(ef == "mEF" & type == "adherence", 0.6,
+             ifelse(ef == "mEF" & type == "persistence", 0.2, NA))))
+  
+  # Coord cartesian limits
+  xlms.ll <- ifelse(ef == "rEF" & type == "adherence", 0.5,
+             ifelse(ef == "rEF" & type == "persistence", 0.8,
+             ifelse(ef == "mEF" & type == "adherence", 0,
+             ifelse(ef == "mEF" & type == "persistence", 0.6, NA))))
+  
+  xlms.ul <- ifelse(ef == "rEF" & type == "adherence", 2.3,
+             ifelse(ef == "rEF" & type == "persistence", 1.7,
+             ifelse(ef == "mEF" & type == "adherence", 5.4,
+             ifelse(ef == "mEF" & type == "persistence", 2.0, NA))))
+  
+  # Scale_x_continuous limits
+  lims.ll <- ifelse(ef == "rEF" & type == "adherence", 0,
+             ifelse(ef == "rEF" & type == "persistence", 0,
+             ifelse(ef == "mEF" & type == "adherence", 0,
+             ifelse(ef == "mEF" & type == "persistence", 0, NA))))
+  
+  lims.ul <- ifelse(ef == "rEF" & type == "adherence", 100,
+             ifelse(ef == "rEF" & type == "persistence", 100,
+             ifelse(ef == "mEF" & type == "adherence", 100,
+             ifelse(ef == "mEF" & type == "persistence", 100, NA))))
+  
+  fp <- function(df){
+    plot <- ggplot(data = df, aes(y = line, x = es, xmin = ll, xmax = ul, colour = year)) +
+      geom_point() + geom_errorbarh(height = .1) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = rep("", times = nrow(dat.plot)), expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = NULL, breaks = seq(brks.ll, brks.ul, brks.by), 
+                         limits = c(lims.ll, lims.ul)) + labs(title = "Adjusted OR* (95% CI)") +
+      scale_colour_manual(values= c("#332288", "#117733", "#44AA99")) +
+      geom_vline(xintercept = 1, colour = "black", linetype = "dashed", alpha = 0.5) + 
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0.5) + coord_cartesian(xlim = c(xlms.ll, xlms.ul)) +
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            plot.title = element_text(margin = margin(5, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.line.x.bottom = element_line(colour = "black"),
+            axis.ticks.y = element_blank(),
+            legend.position = "bottom",
+            legend.title = element_blank(),
+            legend.background = element_blank(),
+            legend.key = element_blank())
+  }
+ 
+  fplot <- fp(dat.plot)
+  
+  if(type == "adherence" & ef == "rEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 9, xend = 2.39, yend = 9), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm")))
+  }
+  
+  if(type == "adherence" & ef == "mEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 6, xend = 5.67, yend = 6), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+                     geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 8, xend = 5.67, yend = 8), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+                     geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 9, xend = 5.67, yend = 9), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm")))  
+  }
+  
+  if(type == "persistence" & ef == "mEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 2, xend = 2.07, yend = 2), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 3, xend = 2.07, yend = 3), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 6, xend = 2.07, yend = 6), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 8, xend = 2.07, yend = 8), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 9, xend = 2.07, yend = 9), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 21, xend = 2.07, yend = 21), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) 
+  }
+  
+  # Data to determine bold faces for specific labels bold
+  egfrs <- c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")
+  bold_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = "bold", no = "plain"))
+  size_labels <- rev(ifelse(dat.plot$egfr %in% egfrs, yes = 12, no = 11))
+  
+  gg_datacolumns <- function(df, label, title , labels = NULL){
+    p <- ggplot(data = df, aes(y = line, x = 1)) +
+      geom_hline(yintercept = hlines, linetype = "solid", colour = "grey", alpha = 0.5) + 
+      labs(title = title) + annotate("text", y = dat.plot$line, x = 1, label = label, size = 3) +
+      scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels, expand = c(0.01, 0.01)) +
+      scale_x_continuous(name = "", breaks = 0, labels = "") + 
+      theme(plot.margin = unit(c(0,0,0,0), "cm"),
+            panel.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(), 
+            panel.spacing = unit(0, "cm"),
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(colour = "black", size = size_labels, face = bold_labels), 
+            plot.title = element_text(margin = margin(0, 0, 10, 0), face = "bold", size = 12, hjust = 0.5))
+    return(p)
+  }
+
+  rows <- nrow(dat.plot)
+  
+  txt_gfr.60 <- "eGFR >=60 mL/min/1.73m"
+  txt_gfr.45 <- "eGFR 45-59 mL/min/1.73m"
+  txt_gfr.30 <- "eGFR 30-44 mL/min/1.73m"
+  txt_gfr.00 <- "eGFR <30 mL/min/1.73m"
+  
+  n <- gg_datacolumns(dat.plot, label = dat.plot$n, "N", labels = c(
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "Triple therapy",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" ,  "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "MRA",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "Beta-blocker",
+    "", expression("eGFR <30 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  30-44 mL/min/1.73m" ^ 2), "" , 
+    "", expression("eGFR  45-59 mL/min/1.73m" ^ 2), "" , "", expression("eGFR  >=60 mL/min/1.73m" ^ 2), "" , "ACEi/ARB/ARNi"
+  ))
+   
+  prop <- gg_datacolumns(dat.plot, label = dat.plot$prop, "%", labels = rep("", times = rows))
+  
+  result <- gg_datacolumns(dat.plot, label = dat.plot$result, "Adjusted OR* (95% CI)", labels = rep("", times = rows))
+  
+  result.2009 <- gg_datacolumns(dat.plot, label = dat.plot$result_2009, "2009-2011", labels = rep("", times = rows))
+
+  result.2012 <- gg_datacolumns(dat.plot, label = dat.plot$result_2012, "2012-2015", labels = rep("", times = rows))
+  
+  result.2016 <- gg_datacolumns(dat.plot, label = dat.plot$result_2016, "2016-2018", labels = rep("", times = rows))
+  
+  plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
+  
+  ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+  
+  ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
+         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+}
+
+## Run function
+# Prescriptions in rEF
+plots("adherence", "rEF")
+
+# Filled prescriptions in rEF
+plots("persistence", "rEF")
+
+# Prescriptions in mrEF
+plots("adherence", "mEF")
+
+# Filled prescriptions in mrEF
+plots("persistence", "mEF")
+
+```
+
+
+## 5.4. Checking diuretics
+```{r}
+### We want to know how many of diuretics are actually loop diuretics and how many people received only other diuretics
+# HFrEF
+dat.temp <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup() %>% 
+    filter(cov_ef == "rEF" & index_dt >= as.Date("2011-01-01"))
+
+tab <- table(dat.temp$cov_diu, dat.temp$cov_ldiu, useNA = "always") %>% as.matrix.data.frame() %>% as.data.frame() %>%
+  rename(loopdiuretics_no = 1, loopdiuretics_yes = 2, loopdiuretics_NA = 3)
+
+rownames(tab) <- c("diuretics_no", "diuretics_yes", "diuretics_NA")
+
+p.users <- round(length(unique((filter(dat.temp, cov_diu == "Yes"))$lopnr)) / length(unique(dat.temp$lopnr)) * 100, digits = 1)
+print(paste0("HFrEF: % of individuals with diuretics after 2011: ", p.users, "%"))
+
+total.diuretics <- sum(tab["diuretics_yes", ])
+ofwhich.ldiuretics <- tab["diuretics_yes", "loopdiuretics_yes"]
+ofwhichnot.ldiuretics <- tab["diuretics_yes", "loopdiuretics_no"]
+ofwhich.NA <- tab["diuretics_yes", "loopdiuretics_NA"]
+
+prop.diuretics.notloop <- paste0(round(ofwhichnot.ldiuretics / total.diuretics * 100, digits = 1), "%")
+prop.diuretics.loop <- paste0(round(ofwhich.ldiuretics / total.diuretics * 100, digits = 1), "%")
+prop.diuretics.NA <- paste0(round(ofwhich.NA / total.diuretics * 100, digits = 1), "%")
+
+print(paste0("HFrEF: Diuretics which are not loop: ", prop.diuretics.notloop))
+print(paste0("HFrEF: Diuretics which are loop: ", prop.diuretics.loop))
+print(paste0("HFrEF: Diuretics which we do not know what they are: ", prop.diuretics.NA))
+
+# HFmrEF
+dat.temp <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup() %>% 
+    filter(cov_ef == "mEF" & index_dt >= as.Date("2011-01-01"))
+
+tab <- table(dat.temp$cov_diu, dat.temp$cov_ldiu, useNA = "always") %>% as.matrix.data.frame() %>% as.data.frame() %>%
+  rename(loopdiuretics_no = 1, loopdiuretics_yes = 2, loopdiuretics_NA = 3)
+
+rownames(tab) <- c("diuretics_no", "diuretics_yes", "diuretics_NA")
+
+p.users <- round(length(unique((filter(dat.temp, cov_diu == "Yes"))$lopnr)) / length(unique(dat.temp$lopnr)) * 100, digits = 1)
+print(paste0("HFmrEF: % of individuals with diuretics after 2011: ", p.users, "%"))
+
+total.diuretics <- sum(tab["diuretics_yes", ])
+ofwhich.ldiuretics <- tab["diuretics_yes", "loopdiuretics_yes"]
+ofwhichnot.ldiuretics <- tab["diuretics_yes", "loopdiuretics_no"]
+ofwhich.NA <- tab["diuretics_yes", "loopdiuretics_NA"]
+
+prop.diuretics.notloop <- paste0(round(ofwhichnot.ldiuretics / total.diuretics * 100, digits = 1), "%")
+prop.diuretics.loop <- paste0(round(ofwhich.ldiuretics / total.diuretics * 100, digits = 1), "%")
+prop.diuretics.NA <- paste0(round(ofwhich.NA / total.diuretics * 100, digits = 1), "%")
+
+print(paste0("HFmrEF: Diuretics which are not loop: ", prop.diuretics.notloop))
+print(paste0("HFmrEF: Diuretics which are loop: ", prop.diuretics.loop))
+print(paste0("HFmrEF: Diuretics which we do not know what they are: ", prop.diuretics.NA))
+
+```
