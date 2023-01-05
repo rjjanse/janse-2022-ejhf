@@ -9,7 +9,7 @@ DOI: https://doi.org/10.1002/ejhf.2620
 **Conclusions:** Patients with HF and CKD are less likely to be prescribed and to fill prescriptions for evidence-based therapies, showing lower adherence and persistence, even at eGFR categories where these therapies are recommended and have shown efficacy in clinical trials.
 
 ## Codes
-- 1. GDT_HF_CKD-Cohort-26112021.R: Applying in- and exclusion data
-- 2. GDT_HF_CKD-Drugs-12012022.R: Get basic information on drugs of interest
-- 3. GDT_HF_CKD-Patterns-31012022.R: Calculating adherence, persistence, and restarting
-- 4. GDT_HF_CKD-Analysis-14012022.Rmd: Performing analyses
+- 1.GDT_HF_CKD-Cohort-26112021.R: Applying in- and exclusion data
+- 2.GDT_HF_CKD-Drugs-12012022.R: Get basic information on drugs of interest
+- 3.GDT_HF_CKD-Patterns-31012022.R: Calculating adherence, persistence, and restarting
+- 4.GDT_HF_CKD-Analysis-14012022.Rmd: Performing analyses
