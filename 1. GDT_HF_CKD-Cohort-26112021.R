@@ -9,7 +9,7 @@ rm(list = ls())
 pacman::p_load("dplyr", "tidyverse")
 
 memory.limit(size = 60000)
-setwd("~/Research/[] Nephrology/5. GDT_HF_CKD/Codes/Dataframes/")
+setwd("")
 
 ##### 1. Exclusion criteria #####
 # 1. Last registration with available eGFR & HF
