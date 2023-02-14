@@ -9,7 +9,7 @@ rm(list = ls()); gc()
 pacman::p_load("dplyr", "tidyverse")
 
 memory.limit(size = 60000)
-setwd("~/Research/[] Nephrology/5. GDT_HF_CKD/Codes/Dataframes/")
+setwd("")
 load("sample.Rdata")
 load("drugs.Rdata")
 load("atc_dur.Rdata")
