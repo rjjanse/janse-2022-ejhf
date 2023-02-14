@@ -27,7 +27,7 @@ knitr::opts_chunk$set(echo = FALSE, evaluate = TRUE, tidy = TRUE,
                       out.width = '600px', dpi = 100)
 
 # Change to your own directory
-knitr::opts_knit$set(root.dir = "~/Research/[] Nephrology/5. GDT_HF_CKD/Codes/Dataframes/")
+knitr::opts_knit$set(root.dir = "")
 
 # packages
 pacman::p_load("dplyr","tidyr","Gmisc","knitr", "broom", "ggplot2","survival","reshape2","data.table","tableone", "broom", "formatR", 
@@ -504,10 +504,10 @@ barplot <- function(type, ef){
   type <- ifelse(type == "prescriptions", "presp", "claim")
   
   ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".pdf"), 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+         path = "", width = 8, height = 5, dpi = 600)
   
   ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".png"), 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+         path = "", width = 8, height = 5, dpi = 600)
 }
 
 ### Create plots
@@ -852,10 +852,10 @@ fps <- function(ef){
   plot <- plot_grid(n, fplot, result.preps, result.claim, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 2, 1, 1))
 
   ggsave(filename = paste0("fp_props_", ef, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 9, height = 8, dpi = 600)
+         path = "", width = 9, height = 8, dpi = 600)
 
   ggsave(filename = paste0("fp_props_", ef, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 9, height = 8, dpi = 600)
+         path = "", width = 9, height = 8, dpi = 600)
 }
 
 ### Make plots
@@ -947,10 +947,10 @@ plt.spline <- function(type, ef, drg){
   
   # Save
   ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Splines/", width = 9, height = 8, dpi = 600)
+         path = "", width = 9, height = 8, dpi = 600)
 
   ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Splines/", width = 9, height = 8, dpi = 600)
+         path = "", width = 9, height = 8, dpi = 600)
 }
 
 ## Prescriptions
@@ -1476,7 +1476,7 @@ cifs <- function(drg, ef, zoom = FALSE){
 
   plot
 
-  ggsave(savename, path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/CIFs/", dpi = 600, width = 10, height = 5)
+  ggsave(savename, path = "", dpi = 600, width = 10, height = 5)
 }
 
 for(drg in c("RASi", "BB", "MRA", "ARNi", "TT")){
@@ -1938,10 +1938,10 @@ fps <- function(type, ef){
   }
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
+         path = "", width = wd, height = 5, dpi = 600)
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
+         path = "", width = wd, height = 5, dpi = 600)
 }
 
 ### Make plots
@@ -2210,10 +2210,10 @@ fig <- function(type, drg, ef){
   
   plot <- cowplot::plot_grid(fp, or, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(3, 1))
   
-  ggsave(plot, file = paste("~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Predictors/fp", type, ef, drg, ".png", sep = "_"),
+  ggsave(plot, file = paste("", type, ef, drg, ".png", sep = "_"),
          width = 8, height = 5, dpi = 600)
   
-  ggsave(plot, file = paste("~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Predictors/fp", type, ef, drg, ".pdf", sep = "_"),
+  ggsave(plot, file = paste("", type, ef, drg, ".pdf", sep = "_"),
          width = 8, height = 5, dpi = 600)
 }
 
@@ -2519,10 +2519,10 @@ fps <- function(ef, outcome){
   plot <- plot_grid(n, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.3, 2, 1.2))
 
   ggsave(filename = paste0("fp_", outcome, "_", ef, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
+         path = "", width = 8, height = 5, dpi = 600)
 
   ggsave(filename = paste0("fp_", outcome, "_", ef, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
+         path = "", width = 8, height = 5, dpi = 600)
 }
 
 ### For loop to create all plots
@@ -3532,10 +3532,10 @@ plots <- function(type, ef){
   plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
   
   ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+         path = "", width = 10.5, height = 10, dpi = 600)
   
   ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+         path = "", width = 10.5, height = 10, dpi = 600)
 }
 
 ## Run function
@@ -3851,10 +3851,10 @@ plots <- function(type, ef){
   plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
   
   ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+         path = "", width = 10.5, height = 10, dpi = 600)
   
   ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
+         path = "", width = 10.5, height = 10, dpi = 600)
 }
 
 ## Run function
