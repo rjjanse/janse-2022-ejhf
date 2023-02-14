@@ -9,12 +9,12 @@ rm(list = ls())
 pacman::p_load("dplyr", "tidyverse")
 
 memory.limit(size = 60000)
-setwd("~/Research/[] Nephrology/5. GDT_HF_CKD/Codes/Dataframes/")
+setwd("")
 load("cohort.Rdata")
-load("~/Datasets/SwedeHF2019/lmsel.Rdata")
+load("lmsel.Rdata")
 
 ##### 1. Prepare medication data #####
-# load("~/Datasets/SwedeHF2019/lmsel.RData")
+# load("lmsel.RData")
 # drugs <- lmsel %>% rename(lopnr = LopNr) %>% filter(lopnr %in% cohort$lopnr) %>% rename(edatum = EDATUM, antal = ANTAL, atc = ATC) %>%
 #     dplyr::select(lopnr, atc, edatum, forpddd, antnum, antal) %>%
 #     filter(grepl("^C09[A-D]", atc) | # RASi
