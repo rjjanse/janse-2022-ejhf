@@ -27,7 +27,7 @@ knitr::opts_chunk$set(echo = FALSE, evaluate = TRUE, tidy = TRUE,
                       out.width = '600px', dpi = 100)
 
 # Change to your own directory
-knitr::opts_knit$set(root.dir = "")
+knitr::opts_knit$set(root.dir = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/codes/dataframes")
 
 # packages
 pacman::p_load("dplyr","tidyr","Gmisc","knitr", "broom", "ggplot2","survival","reshape2","data.table","tableone", "broom", "formatR", 
@@ -42,8 +42,6 @@ options(knitr.table.format = 'markdown')
 ```{r data settings}
 # This is used to load the data
 rm(list = ls()) 
-
-memory.limit(size = 60000)
 
 # Load data
 load("pop.Rdata")
@@ -141,12 +139,12 @@ tab1 <- function(df){
   # https://www.rdocumentation.org/packages/tableone/versions/0.12.0/topics/CreateTableOne 
   # https://www.rdocumentation.org/packages/tableone/versions/0.12.0/topics/print.TableOne
   table_overall <- CreateTableOne(vars = listvar, data = df, factorVars = catvar)
-  table_overall <- print(table_overall, printToggle = FALSE, noSpaces = TRUE, catDigits = 0, contDigits = 0, pDigits = 3,
+  table_overall <- print(table_overall, printToggle = FALSE, noSpaces = TRUE, catDigits = 1, contDigits = 1, pDigits = 3,
                          nonnormal = c("cov_age", "cov_egfr", "cov_hr", "cov_bpsys", "cov_bpdia", "cov_bmi", "cov_hr", "cov_ntprobnp")) 
 
   # Makes baseline table stratified by treatment level
   table_stratified <- CreateTableOne(vars = listvar, data = df, factorVars = catvar, smd = FALSE, strata = "exp_egfr")
-  table_stratified <- print(table_stratified, printToggle = FALSE, noSpaces = TRUE, catDigits = 0, contDigits = 0, pDigits = 3,
+  table_stratified <- print(table_stratified, printToggle = FALSE, noSpaces = TRUE, catDigits = 1, contDigits = 1, pDigits = 3,
                             nonnormal = c("cov_age", "cov_egfr", "cov_hr", "cov_bpsys", "cov_bpdia", "cov_bmi", "cov_hr", "cov_ntprobnp"), 
                             smd = FALSE) 
   table_stratified <- as.matrix(table_stratified[, 1:4])
@@ -504,10 +502,10 @@ barplot <- function(type, ef){
   type <- ifelse(type == "prescriptions", "presp", "claim")
   
   ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".pdf"), 
-         path = "", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Barplots/", width = 8, height = 5, dpi = 600)
   
   ggsave(plot = plot, filename = paste0(paste("barplot", type, ef, sep = "_"), ".png"), 
-         path = "", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Barplots/", width = 8, height = 5, dpi = 600)
 }
 
 ### Create plots
@@ -622,16 +620,18 @@ barplot <- function(ef){
           axis.line.x = element_line(colour = "black"),
           axis.line.y = element_line(colour = "black"),
           legend.title = element_blank(),
+          legend.background = element_rect(fill = "transparent", colour = NA),
           legend.position = "bottom",
-          panel.background = element_blank(),
+          panel.background = element_rect(fill = "transparent", colour = NA),
+          plot.background = element_rect(fill = "transparent", colour = NA),
           panel.grid = element_blank(),
           plot.title = element_text(hjust = 0.5)))
   
   ggsave(plot = plot, filename = paste0(paste("ol_barplot", ef, sep = "_"), ".pdf"), 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/Barplots", width = 8, height = 5, dpi = 600)
   
   ggsave(plot = plot, filename = paste0(paste("ol_barplot", ef, sep = "_"), ".png"), 
-         path = "~/Research/[] Nephrology/5. GDT_HF_CKD/Figures/Barplots/", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/Barplots", width = 8, height = 5, dpi = 600)
 }
 
 ### Create plots
@@ -852,10 +852,10 @@ fps <- function(ef){
   plot <- plot_grid(n, fplot, result.preps, result.claim, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 2, 1, 1))
 
   ggsave(filename = paste0("fp_props_", ef, ".png"), plot = plot, 
-         path = "", width = 9, height = 8, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/forest plots", width = 9, height = 8, dpi = 600)
 
   ggsave(filename = paste0("fp_props_", ef, ".pdf"), plot = plot, 
-         path = "", width = 9, height = 8, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/forest plots", width = 9, height = 8, dpi = 600)
 }
 
 ### Make plots
@@ -947,10 +947,10 @@ plt.spline <- function(type, ef, drg){
   
   # Save
   ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".png"), plot = plot, 
-         path = "", width = 9, height = 8, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/splines", width = 9, height = 8, dpi = 600)
 
   ggsave(filename = paste0("splines_", type, "_", ef, "_", drg, ".pdf"), plot = plot, 
-         path = "", width = 9, height = 8, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/splines", width = 9, height = 8, dpi = 600)
 }
 
 ## Prescriptions
@@ -1174,10 +1174,10 @@ prps <- function(type, ef, drg){
   n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
   
   if(type == "adherence"){
-    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
-    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
-    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
-    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["0"]]
   }
   
   if(type == "persistence"){
@@ -1476,7 +1476,7 @@ cifs <- function(drg, ef, zoom = FALSE){
 
   plot
 
-  ggsave(savename, path = "", dpi = 600, width = 10, height = 5)
+  ggsave(savename, path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/cifs", dpi = 600, width = 10, height = 5)
 }
 
 for(drg in c("RASi", "BB", "MRA", "ARNi", "TT")){
@@ -1491,7 +1491,7 @@ rm(cifs)
 
 
 ## 3.3. Restarting after discontinuation
-```{r Restart}
+```{r Restart, eval=FALSE, include=FALSE}
 ### Function for risk ratio
 rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
   b <- as.numeric(b)
@@ -1769,10 +1769,10 @@ f <- function(type, ef, drg){
   n.00 <- table(dat.temp$exp_egfr)[["eGFR <30"]]
  
    if(type == "adherence"){
-    e.60 <- table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["1"]]
-    e.45 <- table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["1"]]
-    e.30 <- table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["1"]]
-    e.00 <- table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["1"]]
+    e.60 <- n.60 - table(filter(dat.temp, exp_egfr == "eGFR >60")$pdc_ind)[["0"]]
+    e.45 <- n.45 - table(filter(dat.temp, exp_egfr == "eGFR 45-59")$pdc_ind)[["0"]]
+    e.30 <- n.30 - table(filter(dat.temp, exp_egfr == "eGFR 30-44")$pdc_ind)[["0"]]
+    e.00 <- n.00 - table(filter(dat.temp, exp_egfr == "eGFR <30")$pdc_ind)[["0"]]
   }
   
   if(type == "persistence"){
@@ -1836,8 +1836,8 @@ fps <- function(type, ef){
                                                                                                ifelse(egfr == "MRA", "MRA", egfr)))))))))
                                        
   
-  uplim <- ifelse(type == "adherence", 1.6, 1.5)
-  uptik <- ifelse(type == "adherence", 1.6, 1.4)
+  uplim <- ifelse(type == "adherence", 1.6, 2)
+  uptik <- ifelse(type == "adherence", 1.6, 2)
   
   fp <- function(df){
     plot <- ggplot(data = df, aes(y = line, x = es, xmin = ll, xmax = ul)) +
@@ -1849,7 +1849,8 @@ fps <- function(type, ef){
       labs(title = "") + coord_cartesian(xlim = c(0.7, uplim)) +
       theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
             plot.title = element_text(margin = margin(5, 0, 10, 0), face = "bold", size = 12, hjust = 0.5),
-            panel.background = element_blank(),
+            panel.background = element_rect(fill = "transparent", colour = NA),
+            plot.background = element_rect(fill = "transparent", colour = NA),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
             panel.border = element_blank(), 
@@ -1865,23 +1866,20 @@ fps <- function(type, ef){
     fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 1, xend = 1.6449, yend = 1), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm"))) +
-      geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 2, xend = 1.6449, yend = 2), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm"))) +
       geom_segment(inherit.aes = FALSE, aes(x = 1.6, y = 3, xend = 1.6449, yend = 3), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm")))
   }
-  
-    if(type == "persistence" & ef == "mEF"){
-    # Add arrow for truncated confidence intervals
-    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 3, xend = 1.54, yend = 3), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm"))) +
-      geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 8, xend = 1.54, yend = 8), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm")))
-  }
+  # 
+  #   if(type == "persistence" & ef == "mEF"){
+  #   # Add arrow for truncated confidence intervals
+  #   fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 3, xend = 1.54, yend = 3), 
+  #                                 lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+  #                                 arrow = arrow(length = unit(0.2, "cm"))) +
+  #     geom_segment(inherit.aes = FALSE, aes(x = 1.4, y = 8, xend = 1.54, yend = 8), 
+  #                                 lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+  #                                 arrow = arrow(length = unit(0.2, "cm")))
+  # }
   
   # Data to determine bold faces for specific labels bold
   egfrs <- c("ACEi/ARB/ARNi", "Beta-blocker", "MRA", "Triple therapy")
@@ -1895,7 +1893,8 @@ fps <- function(type, ef){
       scale_y_continuous(name = NULL, breaks = 1:nrow(dat.plot), labels = labels, expand = c(0.05, 0.05)) +
       scale_x_continuous(name = "", breaks = 0, labels = "") + 
       theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
-            panel.background = element_blank(),
+            panel.background = element_rect(fill = "transparent", colour = NA),
+            plot.background = element_rect(fill = "transparent", colour = NA),
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank(),
             panel.border = element_blank(), 
@@ -1938,10 +1937,10 @@ fps <- function(type, ef){
   }
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "", width = wd, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/forest plots", width = wd, height = 5, dpi = 600)
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "", width = wd, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
 }
 
 ### Make plots
@@ -2210,10 +2209,10 @@ fig <- function(type, drg, ef){
   
   plot <- cowplot::plot_grid(fp, or, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(3, 1))
   
-  ggsave(plot, file = paste("", type, ef, drg, ".png", sep = "_"),
+  ggsave(plot, file = paste("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Predictors/fp", type, ef, drg, ".png", sep = "_"),
          width = 8, height = 5, dpi = 600)
   
-  ggsave(plot, file = paste("", type, ef, drg, ".pdf", sep = "_"),
+  ggsave(plot, file = paste("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Predictors/fp", type, ef, drg, ".pdf", sep = "_"),
          width = 8, height = 5, dpi = 600)
 }
 
@@ -2519,10 +2518,10 @@ fps <- function(ef, outcome){
   plot <- plot_grid(n, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.3, 2, 1.2))
 
   ggsave(filename = paste0("fp_", outcome, "_", ef, ".png"), plot = plot, 
-         path = "", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
 
   ggsave(filename = paste0("fp_", outcome, "_", ef, ".pdf"), plot = plot, 
-         path = "", width = 8, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/", width = 8, height = 5, dpi = 600)
 }
 
 ### For loop to create all plots
@@ -3532,10 +3531,10 @@ plots <- function(type, ef){
   plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
   
   ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "", width = 10.5, height = 10, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
   
   ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "", width = 10.5, height = 10, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
 }
 
 ## Run function
@@ -3851,10 +3850,10 @@ plots <- function(type, ef){
   plot <- plot_grid(n, prop, fplot, result, align = "h", nrow = 1, axis = "tlbr", rel_widths = c(1.6, 0.5, 2.5, 1))
   
   ggsave(paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "", width = 10.5, height = 10, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
   
   ggsave(paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
-         path = "", width = 10.5, height = 10, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/Temporal/", width = 10.5, height = 10, dpi = 600)
 }
 
 ## Run function
