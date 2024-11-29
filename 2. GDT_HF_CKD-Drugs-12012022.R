@@ -2,19 +2,20 @@
 # Guideline directed therapy in HF and CKD
 # Roemer Janse - 12/01/2022
 # Code for drugs (determining initiators and non-initiators)
+# Updated to check possible mistake at 2024/11/27
 ### -------------------------------------------------------------------------------- ###
 
 rm(list = ls())
 
 pacman::p_load("dplyr", "tidyverse")
 
-memory.limit(size = 60000)
-setwd("")
+setwd("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/codes/dataframes")
 load("cohort.Rdata")
-load("lmsel.Rdata")
+
+# load("~/Datasets/SwedeHF2019/lmsel.Rdata")
 
 ##### 1. Prepare medication data #####
-# load("lmsel.RData")
+# load("~/Datasets/SwedeHF2019/lmsel.RData")
 # drugs <- lmsel %>% rename(lopnr = LopNr) %>% filter(lopnr %in% cohort$lopnr) %>% rename(edatum = EDATUM, antal = ANTAL, atc = ATC) %>%
 #     dplyr::select(lopnr, atc, edatum, forpddd, antnum, antal) %>%
 #     filter(grepl("^C09[A-D]", atc) | # RASi
@@ -53,22 +54,28 @@ load("drugs.Rdata")
 # Keep first 3 dispensations per person per ATC
 # Calculate total amount of days and packages over these three dispensations
 # Calculate how long it takes to finish a package (days per package)
-# Calculate average amount of days over all people per ATC
-# atc_dur <- dplyr::select(cohort, lopnr, index_dt) %>% left_join(drugs, "lopnr") %>% filter(edatum >= index_dt) %>%
-#     arrange(lopnr, atc, edatum) %>% group_by(lopnr, atc) %>% mutate(n = row_number()) %>% filter(n >= 1 & n <= 3) %>%
-#     mutate(days = as.numeric(lead(edatum) - edatum),
-#            tdays = sum(days, na.rm = TRUE),
-#            npack = sum(antal),
-#            dpp = tdays / npack,
-#            dpp = ifelse(dpp == 0, NA, dpp)) %>% slice(1L) %>% ungroup() %>%
-#     arrange(atc) %>% group_by(atc) %>% mutate(dpp_avg = mean(dpp, na.rm = TRUE)) %>% slice(1L) %>% ungroup() %>%
-#     mutate(dpp = ifelse(dpp_avg < 45, 30,
-#                         ifelse(dpp_avg >= 45 & dpp_avg < 75, 60,
-#                                ifelse(dpp_avg >= 75, 90, NA)))) %>%
-#     dplyr::select(atc, drug, dpp, dpp_avg)
-# 
-# save(atc_dur, file = "atc_dur.Rdata")
-# 
+# # Calculate average amount of days over all people per ATC
+atc_dur <- dplyr::select(cohort, lopnr, index_dt) %>% left_join(drugs, "lopnr") %>% filter(edatum >= index_dt) %>%
+    arrange(lopnr, drug, atc, edatum) %>% group_by(lopnr, drug, atc) %>% mutate(n = row_number()) %>% filter(n >= 1 & n <= 4) %>%
+    mutate(days = as.numeric(lead(edatum) - edatum)) %>%
+    # Remove last row for all individuals (this is only used to calculate the days, but should not have packages taken into account)
+    filter(n != last(n)) %>%
+    # Create new variables
+    mutate(tdays = sum(days, na.rm = TRUE),
+           npack = sum(antal),
+           dpp = tdays / npack,
+           dpp = ifelse(dpp == 0, NA, dpp)) %>% slice(1L) %>% ungroup() %>%
+    arrange(drug, atc) %>% group_by(drug, atc) %>% mutate(dpp_avg = mean(dpp, na.rm = TRUE)) %>% slice(1L) %>% ungroup() %>%
+    mutate(dpp = ifelse(dpp_avg < 45, 30,
+                        ifelse(dpp_avg >= 45 & dpp_avg < 75, 60,
+                               ifelse(dpp_avg >= 75 & dpp_avg < 105, 90, 
+                                      ifelse(dpp_avg >= 105 & dpp_avg < 135, 120,
+                                             ifelse(dpp_avg >= 135 & dpp_avg < 165, 150,
+                                                    ifelse(dpp_avg >= 165, 180, NA))))))) %>%
+    dplyr::select(atc, drug, dpp, dpp_avg)
+
+save(atc_dur, file = "atc_dur.Rdata")
+
 # ### Add a row per drug to cohort
 # lopnrs <- unique(cohort$lopnr)
 # 
@@ -88,7 +95,6 @@ load("drugs.Rdata")
 # save(dat, file = "dat.Rdata")
 
 load("dat.Rdata")
-load("atc_dur.Rdata")
 
 # Join data
 sample <- dat %>% left_join(cohort, "lopnr") 
@@ -111,20 +117,20 @@ sample <- sample %>% left_join(ldisp, c("lopnr", "drug")) %>% left_join(ndisp, c
            edatum = as.Date(ifelse(edatum < oom_dt, NA, edatum), origin = "1970-01-01"))
 
 # Placeholder for number of drugs
-ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
-table(ph$drug)
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
 
 # Exclude oom_dt after censor_dt
 sample <- sample %>% filter(!(oom_dt > censor_dt))
-ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
-table(ph$drug)
-length(unique(sample$lopnr))
-
-ph <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
-table(ph$cov_ef)
-# n = 43,738
-# rEF = 22,631
-# mEF = 21,107
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
+# length(unique(sample$lopnr))
+# 
+# ph <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
+# table(ph$cov_ef)
+# # n = 43,738
+# # rEF = 22,631
+# # mEF = 21,107
 
 # Determine whether a dispensation is collected within 90 days after the out-of-medication date (post-discharge: init_pd)
 sample <- sample %>%
