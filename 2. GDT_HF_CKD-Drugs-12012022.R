@@ -12,7 +12,7 @@ pacman::p_load("dplyr", "tidyverse")
 setwd("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/codes/dataframes")
 load("cohort.Rdata")
 
-# load("~/Datasets/SwedeHF2019/lmsel.Rdata")
+#load("~/Datasets/SwedeHF2019/lmsel.Rdata")
 
 ##### 1. Prepare medication data #####
 # load("~/Datasets/SwedeHF2019/lmsel.RData")
@@ -40,14 +40,46 @@ load("cohort.Rdata")
 #     # Remove dispensations after death
 #     left_join(cohort %>% dplyr::select(lopnr, death_dt), "lopnr") %>%
 #     filter(edatum <= death_dt) %>% dplyr::select(-death_dt)
-# 
+
 # drugs.rasi_arni <- drugs %>% filter(drug == "RASi" | drug == "ARNi") %>% mutate(drug = "RASi/ARNi")
 # 
 # drugs <- rbind(drugs, drugs.rasi_arni)
-# 
+
 # save(drugs, file = "drugs.Rdata")
 
 load("drugs.Rdata")
+
+# Redefine drug labels to fix error in RASi/ARNi allocation
+drugs <- drugs %>%
+    # Keep only distinct rows on studynr, atc, edatum, forpddd, antnum, and antal
+    distinct(lopnr, atc, edatum, forpddd, antnum, antal, .keep_all = TRUE) %>%
+    # Redefine drug labels
+    mutate(drug = if_else(grepl("^C09[A-D]", atc), "RASi/ARNi", 
+                                           if_else(grepl("^C03DA", atc), "MRA",
+                                                   if_else(grepl("^C07", atc), "BB", NA))))
+
+# Save new drugs file
+save(drugs, file = "drugs_new.Rdata")
+
+# Create second data with separate class just for ARNi alone
+drugs_arni <- drugs %>%
+    # Redefine drug labels
+    mutate(drug = if_else(grepl("^C09DX04", atc), "ARNi", "No ARNi")) %>%
+    # Keep only ARNi
+    filter(drug == "ARNi")
+
+# Save new drugs sens file
+save(drugs_arni, file = "drugs_arni_new.Rdata")
+
+# Create second data with separate class just for ARNi alone
+drugs_rasi <- drugs %>%
+    # Redefine drug labels
+    mutate(drug = if_else(str_detect(atc, "^C09[A-C]|^C09DA|^C09DB|^C09DX(?!04)"), "RASi", "No RASi")) %>%
+    # Keep only ARNi
+    filter(drug == "RASi")
+
+# Save new drugs sens file
+save(drugs_rasi, file = "drugs_rasi_new.Rdata")
 
 ##### 2. Determine initiators and non-initiators #####
 ### Determine how long a dispensation lasts
@@ -97,7 +129,9 @@ save(atc_dur, file = "atc_dur.Rdata")
 load("dat.Rdata")
 
 # Join data
-sample <- dat %>% left_join(cohort, "lopnr") 
+sample <- dat %>% left_join(cohort, "lopnr") %>%
+    # Keep only MRA, RASi/ARNi and BB
+    filter(drug %in% c("BB", "MRA", "RASi/ARNi"))
 
 ### Add drugs to sample and determine end date of each dispensation with dpp_avg
 ## First only keep last dispensation before index and all dispensations after
@@ -180,6 +214,226 @@ sample <- sample %>% mutate(time2mort = as.numeric(death_dt - oom_dt),
 save(sample, file = "sample_interim.Rdata")
 load("sample_interim.Rdata")
 
+save(sample, file = "sample.Rdata")
+
+### Repeat sample derivation for ARNi sensitivity analysis
+atc_dur_arni <- dplyr::select(cohort, lopnr, index_dt) %>% left_join(drugs_arni, "lopnr") %>% filter(edatum >= index_dt) %>%
+    arrange(lopnr, drug, atc, edatum) %>% group_by(lopnr, drug, atc) %>% mutate(n = row_number()) %>% filter(n >= 1 & n <= 4) %>%
+    mutate(days = as.numeric(lead(edatum) - edatum)) %>%
+    # Remove last row for all individuals (this is only used to calculate the days, but should not have packages taken into account)
+    filter(n != last(n)) %>%
+    # Create new variables
+    mutate(tdays = sum(days, na.rm = TRUE),
+           npack = sum(antal),
+           dpp = tdays / npack,
+           dpp = ifelse(dpp == 0, NA, dpp)) %>% slice(1L) %>% ungroup() %>%
+    arrange(drug, atc) %>% group_by(drug, atc) %>% mutate(dpp_avg = mean(dpp, na.rm = TRUE)) %>% slice(1L) %>% ungroup() %>%
+    mutate(dpp = ifelse(dpp_avg < 45, 30,
+                        ifelse(dpp_avg >= 45 & dpp_avg < 75, 60,
+                               ifelse(dpp_avg >= 75 & dpp_avg < 105, 90, 
+                                      ifelse(dpp_avg >= 105 & dpp_avg < 135, 120,
+                                             ifelse(dpp_avg >= 135 & dpp_avg < 165, 150,
+                                                    ifelse(dpp_avg >= 165, 180, NA))))))) %>%
+    dplyr::select(atc, drug, dpp, dpp_avg)
+
+save(atc_dur_arni, file = "atc_dur_arni.Rdata")
+
+# Join data
+sample <- dat %>% left_join(cohort, "lopnr") %>%
+    # Keep only ARNi
+    filter(drug == "ARNi")
+
+### Add drugs to sample and determine end date of each dispensation with dpp_avg
+## First only keep last dispensation before index and all dispensations after
+# Last dispensation before index date
+# Keep end date of the last dispensation per drug (without grace period)
+ldisp <- dplyr::select(sample, lopnr, adm_dt) %>% left_join(drugs_arni, "lopnr") %>% filter(edatum < adm_dt) %>%
+    arrange(lopnr, drug, desc(edatum)) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup() %>% left_join(atc_dur_arni, c("atc", "drug")) %>%
+    mutate(end_dt_ldisp = as.Date(edatum + (antal * dpp), origin = "1970-01-01")) %>% dplyr::select(lopnr, drug, end_dt_ldisp)
+
+# All dispensations after index
+ndisp <- dplyr::select(sample, lopnr, index_dt) %>% left_join(drugs_arni, "lopnr") %>% filter(edatum >= index_dt) %>% dplyr::select(-index_dt)
+
+# Add drugs to sample
+# Determine whether a drug is still used after index date (out-of-medication date: oom_dt)
+sample <- sample %>% left_join(ldisp, c("lopnr", "drug")) %>% left_join(ndisp, c("lopnr", "drug")) %>%
+    mutate(oom_dt = as.Date(ifelse(end_dt_ldisp <= index_dt | is.na(end_dt_ldisp), index_dt, end_dt_ldisp), origin = "1970-01-01"),
+           edatum = as.Date(ifelse(edatum < oom_dt, NA, edatum), origin = "1970-01-01"))
+
+# Placeholder for number of drugs
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
+
+# Exclude oom_dt after censor_dt
+sample <- sample %>% filter(!(oom_dt > censor_dt))
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
+# length(unique(sample$lopnr))
+# 
+# ph <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
+# table(ph$cov_ef)
+# # n = 43,738
+# # rEF = 22,631
+# # mEF = 21,107
+
+# Determine whether a dispensation is collected within 90 days after the out-of-medication date (post-discharge: init_pd)
+sample <- sample %>%
+    arrange(lopnr, drug, edatum) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup() %>%
+    mutate(prev = ifelse(oom_dt == index_dt, 0, 1),
+           init_pd = ifelse(prev == 0 & edatum <= (oom_dt + 90), 1,
+                            ifelse(prev == 1 & edatum <= (oom_dt + 60), 1, 0)),
+           init_pd = ifelse(is.na(init_pd) & drug != "TT", 0, init_pd),
+           init_dt = as.Date(ifelse(init_pd == 1, edatum, NA), origin = "1970-01-01"))
+
+tts <- sample %>% filter(drug %in% c("RASi/ARNi", "MRA", "BB", "TT")) %>% arrange(lopnr, drug) %>% group_by(lopnr) %>%
+    mutate(concdrug = ifelse(drug == "TT", sum(init_pd, na.rm = TRUE), NA), 
+           init_pd = ifelse(drug == "TT" & concdrug >= 3, 1,
+                            ifelse(drug == "TT" & concdrug < 3, 0, init_pd))) %>% filter(drug == "TT" & init_pd == 1)
+
+sample <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr) %>% 
+    mutate(init_pd = ifelse(drug == "TT" & lopnr %in% tts[["lopnr"]], 1, 
+                            ifelse(drug == "TT" & !(lopnr %in% tts[["lopnr"]]), 0, init_pd)),
+           init_dt = as.Date(ifelse(drug == "TT" & init_pd == 1, max(init_dt, na.rm = TRUE), init_dt), origin = "1970-01-01")) %>%
+    ungroup() %>% dplyr::select(-end_dt_ldisp)
+
+# Change medication prescription from wide to long
+sample <- sample %>% mutate(# Prescription for RASi
+    pres_pd = ifelse(drug == "RASi" & med_rasi == 1, 1, NA),
+    # Prescription for BBs
+    pres_pd = ifelse(drug == "BB" & med_bb == 1, 1, pres_pd),
+    # Prescription for MRAs
+    pres_pd = ifelse(drug == "MRA" & med_mra == 1, 1, pres_pd),
+    # Prescription for ARNis
+    pres_pd = ifelse(drug == "ARNi" & med_arni == 1, 1, pres_pd),
+    # Prescription for TT
+    pres_pd = ifelse(drug == "TT" & med_tt == 1, 1, pres_pd),
+    # Prescription for RASi/ARNi
+    pres_pd = ifelse(drug == "RASi/ARNi" & (med_rasi == 1 | med_arni == 1), 1, pres_pd)) %>%
+    tidyr::replace_na(list(pres_pd = 0)) %>% dplyr::select(-(med_bb:med_tt), -(atc:antal))
+
+# Determine outcomes
+sample <- sample %>% mutate(time2mort = as.numeric(death_dt - oom_dt),
+                            # For time to heart failure hospitalisation, extract days from index to oom_dt from time2hosphf
+                            time2hosphf = time2hosphf - as.numeric(oom_dt - index_dt),
+                            time2cvmort = as.numeric(death_dt - oom_dt),
+                            # Composite outcome is cv death or heart failure hospitalisation
+                            oc_comp = ifelse(oc_hosphf == "Yes" | oc_cvmort == "Yes", 1, 0),
+                            time2comp = ifelse(oc_comp == 1, pmin(time2hosphf, time2cvmort, na.rm = TRUE),
+                                               as.numeric(censor_dt - oom_dt)))
+
+sample_arni <- sample
+
+save(sample_arni, file = "sample_arni.Rdata")
+
+### Repeat sample derivation for RASi sensitivity analysis
+atc_dur_rasi <- dplyr::select(cohort, lopnr, index_dt) %>% left_join(drugs_rasi, "lopnr") %>% filter(edatum >= index_dt) %>%
+    arrange(lopnr, drug, atc, edatum) %>% group_by(lopnr, drug, atc) %>% mutate(n = row_number()) %>% filter(n >= 1 & n <= 4) %>%
+    mutate(days = as.numeric(lead(edatum) - edatum)) %>%
+    # Remove last row for all individuals (this is only used to calculate the days, but should not have packages taken into account)
+    filter(n != last(n)) %>%
+    # Create new variables
+    mutate(tdays = sum(days, na.rm = TRUE),
+           npack = sum(antal),
+           dpp = tdays / npack,
+           dpp = ifelse(dpp == 0, NA, dpp)) %>% slice(1L) %>% ungroup() %>%
+    arrange(drug, atc) %>% group_by(drug, atc) %>% mutate(dpp_avg = mean(dpp, na.rm = TRUE)) %>% slice(1L) %>% ungroup() %>%
+    mutate(dpp = ifelse(dpp_avg < 45, 30,
+                        ifelse(dpp_avg >= 45 & dpp_avg < 75, 60,
+                               ifelse(dpp_avg >= 75 & dpp_avg < 105, 90, 
+                                      ifelse(dpp_avg >= 105 & dpp_avg < 135, 120,
+                                             ifelse(dpp_avg >= 135 & dpp_avg < 165, 150,
+                                                    ifelse(dpp_avg >= 165, 180, NA))))))) %>%
+    dplyr::select(atc, drug, dpp, dpp_avg)
+
+save(atc_dur_rasi, file = "atc_dur_rasi.Rdata")
+
+# Join data
+sample <- dat %>% left_join(cohort, "lopnr") %>%
+    # Keep only ARNi
+    filter(drug == "RASi")
+
+### Add drugs to sample and determine end date of each dispensation with dpp_avg
+## First only keep last dispensation before index and all dispensations after
+# Last dispensation before index date
+# Keep end date of the last dispensation per drug (without grace period)
+ldisp <- dplyr::select(sample, lopnr, adm_dt) %>% left_join(drugs_rasi, "lopnr") %>% filter(edatum < adm_dt) %>%
+    arrange(lopnr, drug, desc(edatum)) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup() %>% left_join(atc_dur_rasi, c("atc", "drug")) %>%
+    mutate(end_dt_ldisp = as.Date(edatum + (antal * dpp), origin = "1970-01-01")) %>% dplyr::select(lopnr, drug, end_dt_ldisp)
+
+# All dispensations after index
+ndisp <- dplyr::select(sample, lopnr, index_dt) %>% left_join(drugs_rasi, "lopnr") %>% filter(edatum >= index_dt) %>% dplyr::select(-index_dt)
+
+# Add drugs to sample
+# Determine whether a drug is still used after index date (out-of-medication date: oom_dt)
+sample <- sample %>% left_join(ldisp, c("lopnr", "drug")) %>% left_join(ndisp, c("lopnr", "drug")) %>%
+    mutate(oom_dt = as.Date(ifelse(end_dt_ldisp <= index_dt | is.na(end_dt_ldisp), index_dt, end_dt_ldisp), origin = "1970-01-01"),
+           edatum = as.Date(ifelse(edatum < oom_dt, NA, edatum), origin = "1970-01-01"))
+
+# Placeholder for number of drugs
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
+
+# Exclude oom_dt after censor_dt
+sample <- sample %>% filter(!(oom_dt > censor_dt))
+# ph <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup()
+# table(ph$drug)
+# length(unique(sample$lopnr))
+# 
+# ph <- sample %>% arrange(lopnr) %>% group_by(lopnr) %>% slice(1L) %>% ungroup()
+# table(ph$cov_ef)
+# # n = 43,738
+# # rEF = 22,631
+# # mEF = 21,107
+
+# Determine whether a dispensation is collected within 90 days after the out-of-medication date (post-discharge: init_pd)
+sample <- sample %>%
+    arrange(lopnr, drug, edatum) %>% group_by(lopnr, drug) %>% slice(1L) %>% ungroup() %>%
+    mutate(prev = ifelse(oom_dt == index_dt, 0, 1),
+           init_pd = ifelse(prev == 0 & edatum <= (oom_dt + 90), 1,
+                            ifelse(prev == 1 & edatum <= (oom_dt + 60), 1, 0)),
+           init_pd = ifelse(is.na(init_pd) & drug != "TT", 0, init_pd),
+           init_dt = as.Date(ifelse(init_pd == 1, edatum, NA), origin = "1970-01-01"))
+
+tts <- sample %>% filter(drug %in% c("RASi/ARNi", "MRA", "BB", "TT")) %>% arrange(lopnr, drug) %>% group_by(lopnr) %>%
+    mutate(concdrug = ifelse(drug == "TT", sum(init_pd, na.rm = TRUE), NA), 
+           init_pd = ifelse(drug == "TT" & concdrug >= 3, 1,
+                            ifelse(drug == "TT" & concdrug < 3, 0, init_pd))) %>% filter(drug == "TT" & init_pd == 1)
+
+sample <- sample %>% arrange(lopnr, drug) %>% group_by(lopnr) %>% 
+    mutate(init_pd = ifelse(drug == "TT" & lopnr %in% tts[["lopnr"]], 1, 
+                            ifelse(drug == "TT" & !(lopnr %in% tts[["lopnr"]]), 0, init_pd)),
+           init_dt = as.Date(ifelse(drug == "TT" & init_pd == 1, max(init_dt, na.rm = TRUE), init_dt), origin = "1970-01-01")) %>%
+    ungroup() %>% dplyr::select(-end_dt_ldisp)
+
+# Change medication prescription from wide to long
+sample <- sample %>% mutate(# Prescription for RASi
+    pres_pd = ifelse(drug == "RASi" & med_rasi == 1, 1, NA),
+    # Prescription for BBs
+    pres_pd = ifelse(drug == "BB" & med_bb == 1, 1, pres_pd),
+    # Prescription for MRAs
+    pres_pd = ifelse(drug == "MRA" & med_mra == 1, 1, pres_pd),
+    # Prescription for ARNis
+    pres_pd = ifelse(drug == "ARNi" & med_arni == 1, 1, pres_pd),
+    # Prescription for TT
+    pres_pd = ifelse(drug == "TT" & med_tt == 1, 1, pres_pd),
+    # Prescription for RASi/ARNi
+    pres_pd = ifelse(drug == "RASi/ARNi" & (med_rasi == 1 | med_arni == 1), 1, pres_pd)) %>%
+    tidyr::replace_na(list(pres_pd = 0)) %>% dplyr::select(-(med_bb:med_tt), -(atc:antal))
+
+# Determine outcomes
+sample <- sample %>% mutate(time2mort = as.numeric(death_dt - oom_dt),
+                            # For time to heart failure hospitalisation, extract days from index to oom_dt from time2hosphf
+                            time2hosphf = time2hosphf - as.numeric(oom_dt - index_dt),
+                            time2cvmort = as.numeric(death_dt - oom_dt),
+                            # Composite outcome is cv death or heart failure hospitalisation
+                            oc_comp = ifelse(oc_hosphf == "Yes" | oc_cvmort == "Yes", 1, 0),
+                            time2comp = ifelse(oc_comp == 1, pmin(time2hosphf, time2cvmort, na.rm = TRUE),
+                                               as.numeric(censor_dt - oom_dt)))
+
+sample_rasi <- sample
+
+save(sample_rasi, file = "sample_rasi.Rdata")
+
 ### Only C03DA01 and C03DA04 in lakemedelsregistret
 # ## Check diuretics: we have a variable ldiu and diu, respectively loop diuretics and diuretics.
 # # C03C: loop diuretics
@@ -198,7 +452,7 @@ load("sample_interim.Rdata")
 # table(check2$cov_diu, check2$lmed_diu, useNA = "always")
 # table(check2$cov_diu, check2$lmed_odiu, useNA = "always")
 
-save(sample, file = "sample.Rdata")
+save(sample, file = "sample_sens.Rdata")
 
 ##### 3. Sensitivity analysis with 180d grace period #####
 # load("dat.Rdata")

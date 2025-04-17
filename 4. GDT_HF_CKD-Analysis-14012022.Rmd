@@ -1491,7 +1491,7 @@ rm(cifs)
 
 
 ## 3.3. Restarting after discontinuation
-```{r Restart, eval=FALSE, include=FALSE}
+```{r Restart, echo=FALSE}
 ### Function for risk ratio
 rr <- function(b, d, e, f, alpha = 0.05, dec = 2){
   b <- as.numeric(b)
@@ -1616,11 +1616,21 @@ prps <- function(ef, drg){
   or.un.30 <- or.un(dat.temp, drg, "eGFR 30-44")
   or.un.00 <- or.un(dat.temp, drg, "eGFR <30")
   
-  # Determine odds ratio (multivariable)
-  or.60 <- "1 (Reference)"
-  or.45 <- or(dat.temp, drg, "eGFR 45-59")
-  or.30 <- or(dat.temp, drg, "eGFR 30-44")
-  or.00 <- or(dat.temp, drg, "eGFR <30")
+  if((drg != "ARNi" & ef == "mEF") | ef == "rEF"){
+    # Determine odds ratio (multivariable)
+    or.60 <- "1 (Reference)"
+    or.45 <- or(dat.temp, drg, "eGFR 45-59")
+    or.30 <- or(dat.temp, drg, "eGFR 30-44")
+    or.00 <- or(dat.temp, drg, "eGFR <30")
+  }
+  
+  else {
+    # Data too small to estimate OR
+    or.60 <- "NA"
+    or.45 <- "NA"
+    or.30 <- "NA"
+    or.00 <- "NA"
+  }
   
   tab <- data.frame(
     drug = c(drg, "", "", ""),
@@ -1647,6 +1657,7 @@ tab.rEF <- rbind(
 )
 
 kable(tab.rEF, caption = "Restarters after discontinuation in HFrEF")
+writexl::write_xlsx(tab.rEF, path = "restart_rEF.xlsx")
 
 # HFmrEF
 tab.mEF <- rbind(
@@ -1658,6 +1669,7 @@ tab.mEF <- rbind(
 )
 
 kable(tab.mEF, caption = "Restarters after discontinuation in HFmrEF")
+writexl::write_xlsx(tab.mEF, path = "restart_mEF.xlsx")
 
 rm(tab.mEF, tab.pEF, tab.rEF, prps)
 
@@ -3754,29 +3766,50 @@ plots <- function(type, ef){
  
   fplot <- fp(dat.plot)
   
-  if(type == "adherence" & ef == "rEF"){
-    # Add arrow for truncated confidence intervals
-    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 9, xend = 2.39, yend = 9), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm")))
-  }
-  
   if(type == "adherence" & ef == "mEF"){
     # Add arrow for truncated confidence intervals
-    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 6, xend = 5.67, yend = 6), 
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 3, xend = 5.67, yend = 3), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) 
+  }
+  
+  if(type == "persistence" & ef == "rEF"){
+    # Add arrow for truncated confidence intervals
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 3, xend = 1.745, yend = 3), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
-                     geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 8, xend = 5.67, yend = 8), 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 8, xend = 1.745, yend = 8), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
-                     geom_segment(inherit.aes = FALSE, aes(x = 5.4, y = 9, xend = 5.67, yend = 9), 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 40, xend = 1.745, yend = 40), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 41, xend = 1.745, yend = 41), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 42, xend = 1.745, yend = 42), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm")))  
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 43, xend = 1.745, yend = 43), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 46, xend = 1.745, yend = 46), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 47, xend = 1.745, yend = 47), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 48, xend = 1.745, yend = 48), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) 
   }
   
   if(type == "persistence" & ef == "mEF"){
     # Add arrow for truncated confidence intervals
-    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 2, xend = 2.07, yend = 2), 
+    fplot <- fplot + geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 1, xend = 2.07, yend = 1), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 2, xend = 2.07, yend = 2), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 3, xend = 2.07, yend = 3), 
@@ -3785,15 +3818,30 @@ plots <- function(type, ef){
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 6, xend = 2.07, yend = 6), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 7, xend = 2.07, yend = 7), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 8, xend = 2.07, yend = 8), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 9, xend = 2.07, yend = 9), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 16, xend = 2.07, yend = 16), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 19, xend = 2.07, yend = 19), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 21, xend = 2.07, yend = 21), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
-                                  arrow = arrow(length = unit(0.2, "cm"))) 
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 46, xend = 2.07, yend = 46), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
+                                  arrow = arrow(length = unit(0.2, "cm"))) + 
+      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 48, xend = 2.07, yend = 48), 
+                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
+                                  arrow = arrow(length = unit(0.2, "cm")))
   }
   
   # Data to determine bold faces for specific labels bold

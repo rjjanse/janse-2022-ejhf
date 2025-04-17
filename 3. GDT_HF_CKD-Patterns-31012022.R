@@ -8,21 +8,26 @@ rm(list = ls()); gc()
 
 pacman::p_load("dplyr", "tidyverse")
 
-memory.limit(size = 60000)
-setwd("")
+setwd("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/codes/dataframes")
 load("sample.Rdata")
-load("drugs.Rdata")
+load("sample_arni.Rdata")
+load("sample_rasi.Rdata")
+load("drugs_new.Rdata")
+load("drugs_arni_new.Rdata")
+load("drugs_rasi_new.Rdata")
 load("atc_dur.Rdata")
+load("atc_dur_arni.Rdata")
+load("atc_dur_rasi.Rdata")
 
 ##### 1. Adherence and persistence among initiators #####
 ### Function for adherence ###
-adh <- function(df, drug_df, yr){
+adh <- function(df, drug_df, yr, df_atc_dur){
     # Prepare drugs data
     drugs_df <- df %>% mutate(yr = yr,
                               year_dt = as.Date(ifelse(yr == 0, censor_dt, (init_dt + (yr * 365.25))), origin = "1970-01-01"),
                               year_dt = as.Date(ifelse(year_dt > censor_dt, censor_dt, year_dt), origin = "1970-01-01")) %>% 
         left_join(drug_df, "lopnr") %>% filter(edatum >= init_dt & edatum <= year_dt) %>% dplyr::select(-(drug:year_dt)) %>% 
-        arrange(lopnr, edatum) %>% left_join(atc_dur %>% dplyr::select(atc, dpp), "atc")
+        arrange(lopnr, edatum) %>% left_join(df_atc_dur %>% dplyr::select(atc, dpp), "atc")
     
     # Prepare data for the loop
     adh_drug <- df %>% mutate(yr = yr,
@@ -71,7 +76,7 @@ adh <- function(df, drug_df, yr){
 }
 
 ### Function for persistence ###
-per <- function(df, drug_df, yr, gp){
+per <- function(df, drug_df, yr, gp, df_atc_dur){
     # To get persistence (60 day gap)
     # First determine when a prescription ends
     # Then calculate the gap between each end date and subsequent start date
@@ -79,7 +84,7 @@ per <- function(df, drug_df, yr, gp){
                               year_dt = as.Date(ifelse(yr == 0, censor_dt, (init_dt + (yr * 365.25))), origin = "1970-01-01"),
                               year_dt = as.Date(ifelse(year_dt > censor_dt, censor_dt, year_dt), origin = "1970-01-01")) %>% 
         left_join(drug_df, "lopnr") %>% filter(edatum >= init_dt & edatum <= year_dt) %>% dplyr::select(-(drug:year_dt)) %>% 
-        arrange(lopnr, edatum) %>% left_join(atc_dur %>% dplyr::select(atc, dpp), "atc")
+        arrange(lopnr, edatum) %>% left_join(df_atc_dur %>% dplyr::select(atc, dpp), "atc")
     
     per_drug <- df %>% mutate(yr = yr,
                               year_dt = as.Date(ifelse(yr == 0, censor_dt, (init_dt + (yr * 365.25))), origin = "1970-01-01"),
@@ -137,24 +142,39 @@ per <- function(df, drug_df, yr, gp){
 
 ### Run functions
 inits <- sample %>% filter(init_pd == 1)
+inits_arni <- sample_arni %>% filter(init_pd == 1)
+inits_rasi <- sample_rasi %>% filter(init_pd == 1)
 
-# adh_bb <- adh(inits %>% filter(drug == "BB"), drugs %>% filter(drug == "BB") %>% dplyr::select(-drug), yr = 1)
-# adh_rasi <- adh(inits %>% filter(drug == "RASi"), drugs %>% filter(drug == "RASi") %>% dplyr::select(-drug), yr = 1)
-# adh_arni <- adh(inits %>% filter(drug == "ARNi"), drugs %>% filter(drug == "ARNi") %>% dplyr::select(-drug), yr = 1)
-# adh_mra <- adh(inits %>% filter(drug == "MRA"), drugs %>% filter(drug == "MRA") %>% dplyr::select(-drug), yr = 1)
-# adh_rasi_arni <- adh(inits %>% filter(drug == "RASi/ARNi"), drugs %>% filter(drug == "RASi/ARNi") %>% dplyr::select(-drug), yr = 1)
-# adherence <- rbind(adh_bb, adh_rasi, adh_arni, adh_mra, adh_rasi_arni)
-# save(adherence, file = "adherence.Rdata")
-load("adherence.Rdata")
+adh_bb <- adh(inits %>% filter(drug == "BB"), drugs %>% filter(drug == "BB") %>% dplyr::select(-drug), yr = 1, atc_dur)
+adh_rasi <- adh(inits_rasi %>% filter(drug == "RASi"), drugs_rasi %>% filter(drug == "RASi") %>% dplyr::select(-drug), yr = 1, atc_dur_rasi)
+adh_arni <- adh(inits_arni %>% filter(drug == "ARNi"), drugs_arni %>% filter(drug == "ARNi") %>% dplyr::select(-drug), yr = 1, atc_dur_arni)
+adh_mra <- adh(inits %>% filter(drug == "MRA"), drugs %>% filter(drug == "MRA") %>% dplyr::select(-drug), yr = 1, atc_dur)
+adh_rasi_arni <- adh(inits %>% filter(drug == "RASi/ARNi"), drugs %>% filter(drug == "RASi/ARNi") %>% dplyr::select(-drug), yr = 1, atc_dur)
+adherence <- rbind(adh_bb, adh_rasi, adh_arni, adh_mra, adh_rasi_arni)
+save(adherence, file = "adherence.Rdata")
 
-# per_bb <- per(inits %>% filter(drug == "BB"), drugs %>% filter(drug == "BB") %>% dplyr::select(-drug), yr = 1, gp = 60)
-# per_rasi <- per(inits %>% filter(drug == "RASi"), drugs %>% filter(drug == "RASi") %>% dplyr::select(-drug), yr = 1, gp = 60)
-# per_arni <- per(inits %>% filter(drug == "ARNi"), drugs %>% filter(drug == "ARNi") %>% dplyr::select(-drug), yr = 1, gp = 60)
-# per_mra <- per(inits %>% filter(drug == "MRA"), drugs %>% filter(drug == "MRA") %>% dplyr::select(-drug), yr = 1, gp = 60)
-# per_rasi_arni <- per(inits %>% filter(drug == "RASi/ARNi"), drugs %>% filter(drug == "RASi/ARNi") %>% dplyr::select(-drug), yr = 1, gp = 60)
-# persistence <- rbind(per_bb, per_rasi, per_arni, per_mra, per_rasi_arni)
-# save(persistence, file = "persistence.Rdata")
+# Save individual adherence files
+save(adh_bb, file = "adh_bb.Rdata")
+save(adh_rasi, file = "adh_rasi.Rdata")
+save(adh_arni, file = "adh_arni.Rdata")
+save(adh_mra, file = "adh_mra.Rdata")
+save(adh_rasi_arni, file = "adh_rasi_arni.Rdata")
+
+per_bb <- per(inits %>% filter(drug == "BB"), drugs %>% filter(drug == "BB") %>% dplyr::select(-drug), yr = 1, gp = 60, atc_dur)
+per_rasi <- per(inits_rasi %>% filter(drug == "RASi"), drugs_rasi %>% filter(drug == "RASi") %>% dplyr::select(-drug), yr = 1, gp = 60, atc_dur_rasi)
+per_arni <- per(inits_arni %>% filter(drug == "ARNi"), drugs_arni %>% filter(drug == "ARNi") %>% dplyr::select(-drug), yr = 1, gp = 60, atc_dur_arni)
+per_mra <- per(inits %>% filter(drug == "MRA"), drugs %>% filter(drug == "MRA") %>% dplyr::select(-drug), yr = 1, gp = 60, atc_dur)
+per_rasi_arni <- per(inits %>% filter(drug == "RASi/ARNi"), drugs %>% filter(drug == "RASi/ARNi") %>% dplyr::select(-drug), yr = 1, gp = 60, atc_dur)
+persistence <- rbind(per_bb, per_rasi, per_arni, per_mra, per_rasi_arni)
+save(persistence, file = "persistence.Rdata")
 load("persistence.Rdata")
+
+# Save individual persistence files
+save(per_bb, file = "per_bb.Rdata")
+save(per_rasi, file = "per_rasi.Rdata")
+save(per_arni, file = "per_arni.Rdata")
+save(per_mra, file = "per_mra.Rdata")
+save(per_rasi_arni, file = "per_rasi_arni.Rdata")
 
 ### Add data together and determine adherence and persistence for triple therapy initiators
 pop <- sample %>% left_join(adherence, c("lopnr", "drug")) %>% left_join(persistence, c("lopnr", "drug")) %>%
@@ -241,7 +261,7 @@ rints <- pop %>% dplyr::select(lopnr, drug, init_pd) %>% filter(init_pd == 0) %>
 # Also set some missing triple therapy init_pds to 0
 pop <- pop %>% left_join(rints, c("lopnr", "drug")) %>% left_join(rest, c("lopnr", "drug")) %>% replace_na(list(init_pd = 0))
 
-save(pop, file = "pop.Rdata")
+save(pop, file = "pop_new.Rdata")
 
 # ##### 2. Sensitivity analysis with 180d grace period #####
 # ### Run functions
