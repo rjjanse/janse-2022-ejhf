@@ -44,7 +44,7 @@ options(knitr.table.format = 'markdown')
 rm(list = ls()) 
 
 # Load data
-load("pop.Rdata")
+load("pop_new.Rdata")
 sample <- pop 
 
 # One observation per person
@@ -322,10 +322,10 @@ f <- function(type, ef, drg){
     }
     
     if(type == "Filled prescriptions"){
-      rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
+      rasi_users <- filter(sample, drug == "RASi" & init_pd == 0)
     }
     
-    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01"))
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01") & !(lopnr %in% rasi_users[["lopnr"]]))
   }
   
   # Percentages
@@ -1156,7 +1156,8 @@ prps <- function(type, ef, drg){
   # For ARNi, exclude RASi users and index date before 2016-01-01
   if(drg == "ARNi"){
     rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
-    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01"))
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01") &
+                           !(lopnr %in% rasi_users[["lopnr"]]))
   }
   
   if(type == "adherence"){
@@ -1592,7 +1593,8 @@ prps <- function(ef, drg){
   # For ARNi, exclude RASi users and index date before 2016-01-01
   if(drg == "ARNi"){
     rasi_users <- filter(sample, drug == "RASi" & init_pd == 1)
-    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01") & init_pd == 1)
+    dat.temp <- filter(sample, cov_ef == ef & drug == drg & oom_dt >= as.Date("2016-01-01") & init_pd == 1 &
+                           !(lopnr %in% rasi_users[["lopnr"]]))
   }
   
   # Discontinuers
@@ -1949,7 +1951,7 @@ fps <- function(type, ef){
   }
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".png"), plot = plot, 
-         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/figures/forest plots", width = wd, height = 5, dpi = 600)
+         path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
 
   ggsave(filename = paste0("fp_", type, "_", ef, ".pdf"), plot = plot, 
          path = "C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/Figures/Forest plots/", width = wd, height = 5, dpi = 600)
@@ -3260,7 +3262,7 @@ kable(tab.mrEF, caption = "Prescriptions for anticoagulantia in patients with AF
 rm(list = ls())
 
 # Load data
-load("pop.Rdata")
+load("C:/Users/rjjanse.lumcnet/onedrive - lumc/research/projects/7. gdt_hf_ckd/codes/dataframes/pop_new.Rdata")
 sample <- pop 
 
 # Create new variable with index year
@@ -3781,25 +3783,7 @@ plots <- function(type, ef){
       geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 8, xend = 1.745, yend = 8), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 40, xend = 1.745, yend = 40), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 41, xend = 1.745, yend = 41), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 42, xend = 1.745, yend = 42), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 43, xend = 1.745, yend = 43), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 46, xend = 1.745, yend = 46), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 47, xend = 1.745, yend = 47), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.68, y = 48, xend = 1.745, yend = 48), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm"))) 
   }
@@ -3835,12 +3819,6 @@ plots <- function(type, ef){
                                   arrow = arrow(length = unit(0.2, "cm"))) + 
       geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 21, xend = 2.07, yend = 21), 
                                   lineend = "round", linejoin = "mitre", size = 0.5, colour = "#117733", fill = "#117733",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 46, xend = 2.07, yend = 46), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#44AA99", fill = "#44AA99",
-                                  arrow = arrow(length = unit(0.2, "cm"))) + 
-      geom_segment(inherit.aes = FALSE, aes(x = 1.9, y = 48, xend = 2.07, yend = 48), 
-                                  lineend = "round", linejoin = "mitre", size = 0.5, colour = "#332288", fill = "#332288",
                                   arrow = arrow(length = unit(0.2, "cm")))
   }
   

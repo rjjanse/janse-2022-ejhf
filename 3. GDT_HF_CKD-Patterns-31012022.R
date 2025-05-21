@@ -152,6 +152,7 @@ adh_mra <- adh(inits %>% filter(drug == "MRA"), drugs %>% filter(drug == "MRA") 
 adh_rasi_arni <- adh(inits %>% filter(drug == "RASi/ARNi"), drugs %>% filter(drug == "RASi/ARNi") %>% dplyr::select(-drug), yr = 1, atc_dur)
 adherence <- rbind(adh_bb, adh_rasi, adh_arni, adh_mra, adh_rasi_arni)
 save(adherence, file = "adherence.Rdata")
+load("adherence.Rdata")
 
 # Save individual adherence files
 save(adh_bb, file = "adh_bb.Rdata")
@@ -176,8 +177,10 @@ save(per_arni, file = "per_arni.Rdata")
 save(per_mra, file = "per_mra.Rdata")
 save(per_rasi_arni, file = "per_rasi_arni.Rdata")
 
+load("sample_full.Rdata")
+
 ### Add data together and determine adherence and persistence for triple therapy initiators
-pop <- sample %>% left_join(adherence, c("lopnr", "drug")) %>% left_join(persistence, c("lopnr", "drug")) %>%
+pop <- sample_full %>% left_join(adherence, c("lopnr", "drug")) %>% left_join(persistence, c("lopnr", "drug")) %>%
     arrange(lopnr, drug) %>% group_by(lopnr) %>% 
     mutate(# PDC for triple therapy is the lowest PDC observed
            pdc = ifelse(drug == "TT" & init_pd == 1, min(pdc, na.rm = TRUE), pdc),

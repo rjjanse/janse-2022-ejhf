@@ -131,7 +131,7 @@ load("dat.Rdata")
 # Join data
 sample <- dat %>% left_join(cohort, "lopnr") %>%
     # Keep only MRA, RASi/ARNi and BB
-    filter(drug %in% c("BB", "MRA", "RASi/ARNi"))
+    filter(drug %in% c("BB", "MRA", "RASi/ARNi", "TT"))
 
 ### Add drugs to sample and determine end date of each dispensation with dpp_avg
 ## First only keep last dispensation before index and all dispensations after
@@ -324,6 +324,7 @@ sample <- sample %>% mutate(time2mort = as.numeric(death_dt - oom_dt),
 sample_arni <- sample
 
 save(sample_arni, file = "sample_arni.Rdata")
+load("sample_arni.Rdata")
 
 ### Repeat sample derivation for RASi sensitivity analysis
 atc_dur_rasi <- dplyr::select(cohort, lopnr, index_dt) %>% left_join(drugs_rasi, "lopnr") %>% filter(edatum >= index_dt) %>%
@@ -433,6 +434,13 @@ sample <- sample %>% mutate(time2mort = as.numeric(death_dt - oom_dt),
 sample_rasi <- sample
 
 save(sample_rasi, file = "sample_rasi.Rdata")
+load("sample_rasi.Rdata")
+
+# Combine samples to full sample
+sample_full <- rbind(sample, sample_rasi, sample_arni)
+
+# Save full sample
+save(sample_full, file = "sample_full.Rdata")
 
 ### Only C03DA01 and C03DA04 in lakemedelsregistret
 # ## Check diuretics: we have a variable ldiu and diu, respectively loop diuretics and diuretics.
